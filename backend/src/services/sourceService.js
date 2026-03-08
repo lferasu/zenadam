@@ -8,21 +8,25 @@ const BBC_AMHARIC_SOURCE = {
   type: SOURCE_TYPES.RSS,
   status: SOURCE_STATUS.ACTIVE,
   language: 'am',
+  category: 'news',
   baseUrl: 'https://www.bbc.com/amharic',
   entryUrls: [
     'https://feeds.bbci.co.uk/amharic/rss.xml'
   ],
   fetchConfig: {
     timeoutMs: 15000,
+    retries: 2,
+    retryDelayMs: 300,
     userAgent: 'ZenadamBot/0.1 (+https://zenadam.local)'
   },
   parserConfig: {
-    format: 'rss',
-    preferContentEncoded: true
+    preferredContentField: 'content:encoded',
+    preferredDateField: 'pubDate'
   },
   normalizationConfig: {
-    stripBoilerplate: true,
-    collapseWhitespace: true
+    stripHtml: true,
+    summaryMaxLength: 800,
+    titleCleanupRules: []
   }
 };
 

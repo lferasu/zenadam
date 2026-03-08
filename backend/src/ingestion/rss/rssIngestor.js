@@ -1,4 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
+import { logger } from '../../config/logger.js';
 import { upsertSourceItem } from '../../repositories/sourceItemRepository.js';
 
 const parser = new XMLParser({
@@ -6,6 +7,11 @@ const parser = new XMLParser({
   attributeNamePrefix: '',
   trimValues: true
 });
+
+const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_USER_AGENT = 'ZenadamBot/0.1';
+const DEFAULT_RETRIES = 2;
+const DEFAULT_SUMMARY_MAX_LENGTH = 800;
 
 const asArray = (value) => {
   if (!value) {
@@ -15,20 +21,70 @@ const asArray = (value) => {
   return Array.isArray(value) ? value : [value];
 };
 
+const cleanupTitle = (title, cleanupRules = []) => {
+  if (typeof title !== 'string') {
+    return '';
+  }
+
+  let cleaned = title.trim();
+
+  for (const rule of cleanupRules) {
+    if (!rule) {
+      continue;
+    }
+
+    if (typeof rule === 'string') {
+      cleaned = cleaned.replaceAll(rule, '').trim();
+      continue;
+    }
+
+    if (rule.pattern) {
+      try {
+        const flags = typeof rule.flags === 'string' ? rule.flags : 'g';
+        const regex = new RegExp(rule.pattern, flags);
+        cleaned = cleaned.replace(regex, rule.replacement ?? '').trim();
+      } catch {
+        // Ignore malformed cleanup rules to keep ingestion resilient.
+      }
+    }
+  }
+
+  return cleaned;
+};
+
+const normalizeText = (text, { stripHtml = false, summaryMaxLength = DEFAULT_SUMMARY_MAX_LENGTH } = {}) => {
+  if (typeof text !== 'string') {
+    return '';
+  }
+
+  const htmlStripped = stripHtml ? text.replace(/<[^>]+>/g, ' ') : text;
+  const collapsed = htmlStripped.replace(/\s+/g, ' ').trim();
+
+  if (!summaryMaxLength || collapsed.length <= summaryMaxLength) {
+    return collapsed;
+  }
+
+  return `${collapsed.slice(0, summaryMaxLength).trim()}…`;
+};
+
 const parseFeedItems = (xmlText) => {
   const parsed = parser.parse(xmlText);
   const rssItems = asArray(parsed?.rss?.channel?.item);
+
   if (rssItems.length > 0) {
     return rssItems;
   }
 
-  const atomEntries = asArray(parsed?.feed?.entry);
-  return atomEntries;
+  return asArray(parsed?.feed?.entry);
 };
 
 const resolveLink = (entry) => {
   if (typeof entry?.link === 'string') {
     return entry.link;
+  }
+
+  if (entry?.url) {
+    return entry.url;
   }
 
   if (entry?.link?.href) {
@@ -39,68 +95,194 @@ const resolveLink = (entry) => {
   return links.find((item) => item?.href)?.href ?? null;
 };
 
+const resolveExternalId = (entry, url) => {
+  if (entry?.guid?.['#text']) {
+    return entry.guid['#text'];
+  }
+
+  return entry?.guid ?? entry?.id ?? url ?? entry?.title ?? null;
+};
+
+const resolvePublishedAt = (entry, preferredDateField) => {
+  const fallbacks = [preferredDateField, 'pubDate', 'published', 'updated'].filter(Boolean);
+
+  for (const field of fallbacks) {
+    if (entry?.[field]) {
+      return entry[field];
+    }
+  }
+
+  return null;
+};
+
+const resolveContent = (entry, preferredContentField) => {
+  const fields = [preferredContentField, 'content:encoded', 'description', 'summary', 'content'].filter(Boolean);
+
+  for (const field of fields) {
+    const value = entry?.[field];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+
+    if (value?.['#text']) {
+      return value['#text'];
+    }
+  }
+
+  return '';
+};
+
 const mapEntryToSourceItem = (source, entry) => {
-  const publishedAt = entry.pubDate ?? entry.published ?? entry.updated ?? null;
-  const description = entry['content:encoded'] ?? entry.description ?? entry.summary ?? '';
+  const parserConfig = source?.parserConfig ?? {};
+  const normalizationConfig = source?.normalizationConfig ?? {};
+
   const url = resolveLink(entry);
-  const externalId = entry.guid?.['#text'] ?? entry.guid ?? entry.id ?? url ?? entry.title;
+  const externalId = resolveExternalId(entry, url);
+  const title = cleanupTitle(entry?.title ?? '', normalizationConfig.titleCleanupRules);
+  const publishedAt = resolvePublishedAt(entry, parserConfig.preferredDateField);
+  const content = resolveContent(entry, parserConfig.preferredContentField);
+  const rawText = normalizeText(content, {
+    stripHtml: Boolean(normalizationConfig.stripHtml),
+    summaryMaxLength: normalizationConfig.summaryMaxLength
+  });
 
   return {
     sourceId: source._id,
-    externalId: String(externalId),
+    externalId: externalId ? String(externalId) : '',
     url,
-    title: entry.title ?? '',
+    title,
     rawPayload: entry,
-    rawText: description,
+    rawText,
     publishedAt,
     fetchedAt: new Date()
   };
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const fetchFeedXml = async (url, fetchConfig = {}) => {
-  const timeoutMs = Number(fetchConfig.timeoutMs ?? 15000);
-  const userAgent = fetchConfig.userAgent ?? 'ZenadamBot/0.1';
+  const timeoutMs = Number(fetchConfig.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const userAgent = fetchConfig.userAgent ?? DEFAULT_USER_AGENT;
+  const retries = Number(fetchConfig.retries ?? DEFAULT_RETRIES);
+  const retryDelayMs = Number(fetchConfig.retryDelayMs ?? 300);
 
-  const response = await fetch(url, {
-    headers: {
-      'user-agent': userAgent
-    },
-    signal: AbortSignal.timeout(timeoutMs)
-  });
+  const headers = {
+    ...(fetchConfig.headers ?? {}),
+    'user-agent': userAgent
+  };
 
-  if (!response.ok) {
-    throw new Error(`RSS fetch failed (${response.status}) for ${url}`);
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+
+      if (!response.ok) {
+        throw new Error(`RSS fetch failed (${response.status}) for ${url}`);
+      }
+
+      return response.text();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt <= retries) {
+        await sleep(retryDelayMs * attempt);
+      }
+    }
   }
 
-  return response.text();
+  throw lastError;
 };
 
 export const ingestRssSource = async (source) => {
   const entryUrls = Array.isArray(source.entryUrls) ? source.entryUrls : [];
-  const ingestResults = [];
+
+  const result = {
+    sourceId: source._id,
+    sourceSlug: source.slug,
+    sourceType: source.type,
+    status: 'success',
+    totals: {
+      feedsSucceeded: 0,
+      feedsFailed: 0,
+      itemsFetched: 0,
+      itemsInserted: 0,
+      itemsSkipped: 0
+    },
+    feeds: []
+  };
 
   for (const entryUrl of entryUrls) {
-    const xml = await fetchFeedXml(entryUrl, source.fetchConfig);
-    const entries = parseFeedItems(xml);
-    let upserted = 0;
+    const feedResult = {
+      entryUrl,
+      status: 'success',
+      fetchedEntries: 0,
+      inserted: 0,
+      skipped: 0
+    };
 
-    for (const entry of entries) {
-      const mapped = mapEntryToSourceItem(source, entry);
+    try {
+      const xml = await fetchFeedXml(entryUrl, source.fetchConfig);
+      const entries = parseFeedItems(xml);
 
-      if (!mapped.externalId || !mapped.url || !mapped.title) {
-        continue;
+      feedResult.fetchedEntries = entries.length;
+      result.totals.itemsFetched += entries.length;
+
+      for (const entry of entries) {
+        try {
+          const mapped = mapEntryToSourceItem(source, entry);
+
+          if (!mapped.externalId || !mapped.url || !mapped.title) {
+            feedResult.skipped += 1;
+            result.totals.itemsSkipped += 1;
+            continue;
+          }
+
+          const upsertResult = await upsertSourceItem(mapped);
+          const wasInserted = !upsertResult.lastErrorObject?.updatedExisting;
+
+          if (wasInserted) {
+            feedResult.inserted += 1;
+            result.totals.itemsInserted += 1;
+          } else {
+            feedResult.skipped += 1;
+            result.totals.itemsSkipped += 1;
+          }
+        } catch (error) {
+          feedResult.skipped += 1;
+          result.totals.itemsSkipped += 1;
+
+          logger.warn('Failed to parse or upsert RSS item', {
+            sourceSlug: source.slug,
+            entryUrl,
+            message: error.message
+          });
+        }
       }
 
-      await upsertSourceItem(mapped);
-      upserted += 1;
+      result.totals.feedsSucceeded += 1;
+    } catch (error) {
+      feedResult.status = 'failed';
+      feedResult.error = error.message;
+      result.totals.feedsFailed += 1;
+      result.status = 'partial_failure';
+
+      logger.warn('Failed to ingest RSS feed URL', {
+        sourceSlug: source.slug,
+        entryUrl,
+        message: error.message
+      });
     }
 
-    ingestResults.push({
-      entryUrl,
-      fetchedEntries: entries.length,
-      upserted
-    });
+    result.feeds.push(feedResult);
   }
 
-  return ingestResults;
+  if (result.totals.feedsFailed > 0 && result.totals.feedsSucceeded === 0) {
+    result.status = 'failed';
+  }
+
+  return result;
 };

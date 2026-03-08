@@ -1,0 +1,89 @@
+{
+  "rss": {
+    "slug": "bbc-amharic",
+    "name": "BBC Amharic",
+    "baseUrl": "https://www.bbc.com/amharic",
+    "entryUrls": [
+      "https://feeds.bbci.co.uk/amharic/rss.xml"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "am,en;q=0.8"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": [
+        {
+          "pattern": "\\s*\\|\\s*BBC.*$",
+          "replacement": ""
+        }
+      ]
+    }
+  },
+  "scraper": {
+    "slug": "example-site-scraper",
+    "name": "Example Site Scraper",
+    "baseUrl": "https://example.com",
+    "entryUrls": [
+      "https://example.com/news"
+    ],
+    "type": "scraper",
+    "language": "am",
+    "category": "news",
+    "status": "inactive",
+    "fetchConfig": {
+      "timeoutMs": 20000,
+      "userAgent": "ZenadamBot/0.1"
+    },
+    "parserConfig": {
+      "articleLinkSelector": "a.headline-link",
+      "titleSelector": "h1"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800
+    }
+  },
+  "api": {
+    "slug": "example-api-source",
+    "name": "Example API Source",
+    "baseUrl": "https://api.example.com",
+    "entryUrls": [
+      "https://api.example.com/v1/news"
+    ],
+    "type": "api",
+    "language": "am",
+    "category": "news",
+    "status": "inactive",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "userAgent": "ZenadamBot/0.1",
+      "headers": {
+        "authorization": "Bearer <token>"
+      }
+    },
+    "parserConfig": {
+      "itemsPath": "data.items",
+      "titleField": "headline",
+      "urlField": "link"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800
+    }
+  }
+}
