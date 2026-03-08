@@ -1,1 +1,1 @@
-export const TODO = 'Implementation pending in upcoming phase.';
+export { ingestRssSource } from './rssIngestor.js';

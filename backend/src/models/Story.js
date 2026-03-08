@@ -1,0 +1,16 @@
+export const STORY_COLLECTION = 'stories';
+
+export const STORY_STATUS = {
+  ACTIVE: 'active',
+  ARCHIVED: 'archived'
+};
+
+export const createStoryIndexes = async (db) => {
+  const collection = db.collection(STORY_COLLECTION);
+
+  await Promise.all([
+    collection.createIndex({ clusterKey: 1, language: 1 }, { unique: true }),
+    collection.createIndex({ status: 1, updatedAt: -1 }),
+    collection.createIndex({ language: 1, updatedAt: -1 })
+  ]);
+};
