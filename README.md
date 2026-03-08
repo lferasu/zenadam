@@ -1,6 +1,6 @@
-# Zenadam MVP Repository Skeleton
+# Zenadam MVP Backend (BBC Amharic Source-to-Feed Slice)
 
-Implementation-ready JavaScript monorepo skeleton for the Zenadam MVP backend platform.
+JavaScript monorepo for the Zenadam MVP backend, including a working source-to-feed slice for BBC Amharic RSS ingestion.
 
 ## Repository structure
 
@@ -47,14 +47,22 @@ zenadam/
   .env.example
 ```
 
-## Included starter capabilities
+## Implemented capabilities
 
 - Express API bootstrap with shared JSON envelope shape.
 - Health route at `GET /api/v1/health`.
+- Feed route at `GET /api/v1/feed` with optional `?limit=<n>`.
+- Default source seeding for `bbc-amharic`.
+- RSS ingestion for BBC Amharic feed entries.
+- Normalization + story clustering pipeline to produce feed-ready stories.
 - Worker entrypoints:
   - `npm run worker`
   - `npm run worker:ingestion`
   - `npm run worker:ai`
+  - `npm run worker:seed`
+  - `npm run worker:normalize`
+  - `npm run worker:cluster`
+  - `npm run worker:pipeline`
   - `npm run cron`
 - Render deployment template for API + worker + cron.
 - Environment variable contract in `.env.example`.
@@ -74,14 +82,30 @@ zenadam/
    ```bash
    npm run dev
    ```
-4. Check health:
+4. Seed the default source:
+   ```bash
+   npm run seed:sources
+   ```
+5. Run one ingestion pass:
+   ```bash
+   npm run ingest:rss
+   ```
+6. Build stories from ingested items:
+   ```bash
+   npm run pipeline
+   ```
+7. Check health:
    ```bash
    curl http://localhost:3000/api/v1/health
+   ```
+8. Fetch feed stories:
+   ```bash
+   curl 'http://localhost:3000/api/v1/feed?limit=10'
    ```
 
 ## Next implementation phases
 
-- Source onboarding/admin APIs.
-- Ingestion connectors (RSS/API/scraper) + normalization.
+- Multi-source onboarding/admin APIs.
+- Additional ingestion connectors (API/scraper beyond the current RSS slice).
 - AI pipeline modules (translation/summarization/embeddings).
-- Story clustering, ranking, and feed APIs.
+- Story ranking and personalization layers.
