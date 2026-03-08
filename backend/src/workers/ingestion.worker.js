@@ -1,7 +1,6 @@
 import { logger } from '../config/logger.js';
 import { closeMongoClient } from '../config/database.js';
-import { ingestActiveRssSources } from '../services/sourceIngestionService.js';
-import { ensureDefaultSources } from '../services/sourceService.js';
+import { ingestActiveSources } from '../services/sourceIngestionService.js';
 
 const ingestionQueues = ['ingestion-rss', 'ingestion-api', 'ingestion-scraper'];
 const isOnceMode = process.argv.includes('--once');
@@ -9,13 +8,13 @@ const isOnceMode = process.argv.includes('--once');
 logger.info('Ingestion worker started', { ingestionQueues });
 
 const runCycle = async () => {
-  const sourceSeed = await ensureDefaultSources();
-  const ingestion = await ingestActiveRssSources();
+  const ingestion = await ingestActiveSources();
 
   logger.info('Ingestion cycle completed', {
-    sourceSeedCreated: sourceSeed.created,
-    sourcesProcessed: ingestion.length
+    ...ingestion.metrics
   });
+
+  return ingestion;
 };
 
 if (isOnceMode) {

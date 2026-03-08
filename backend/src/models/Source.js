@@ -1,7 +1,9 @@
 export const SOURCE_COLLECTION = 'sources';
 
 export const SOURCE_TYPES = {
-  RSS: 'rss'
+  RSS: 'rss',
+  SCRAPER: 'scraper',
+  API: 'api'
 };
 
 export const SOURCE_STATUS = {
