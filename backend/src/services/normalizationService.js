@@ -5,21 +5,34 @@ import { buildDedupeHash } from '../utils/hash.js';
 import { normalizeText, pickKeywords } from '../utils/text.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
 
+export const detectLanguage = (text = '') => {
+  const amharicRegex = /[\u1200-\u137F]/;
+  if (amharicRegex.test(text)) {
+    return 'am';
+  }
+
+  return 'en';
+};
+
 const normalizeSourceItem = (item) => {
   const normalizedTitle = normalizeText(item.title || '');
   const normalizedContent = normalizeText(item.rawText || item.title || '');
+  const snippet = normalizedContent.slice(0, 280) || normalizedTitle;
   const publishedAt = item.publishedAt ?? item.fetchedAt ?? null;
+  const language = detectLanguage(`${normalizedTitle} ${normalizedContent}`);
 
   return {
     sourceItemId: item._id,
     sourceId: item.sourceId,
     canonicalUrl: item.url ?? null,
     title: normalizedTitle,
+    snippet,
     content: normalizedContent,
-    language: 'am',
+    language,
     entities: [],
     keywords: pickKeywords(normalizedTitle, normalizedContent),
     publishedAt,
+    clusteringStatus: 'pending',
     dedupeHash: buildDedupeHash({
       title: normalizedTitle,
       content: normalizedContent,
