@@ -16,6 +16,7 @@ export const env = {
   PORT: Number(process.env.PORT ?? 3000),
   API_BASE_PATH: process.env.API_BASE_PATH ?? '/api/v1',
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
+  STORY_MAX_AGE_DAYS: Number(process.env.STORY_MAX_AGE_DAYS ?? 0),
   MONGODB_URI: process.env.MONGODB_URI ?? '',
   MONGODB_DB_NAME: process.env.MONGODB_DB_NAME ?? 'zenadam_dev',
   AI_API_KEY: process.env.AI_API_KEY ?? '',
