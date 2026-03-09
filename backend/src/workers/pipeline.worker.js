@@ -6,10 +6,11 @@ const run = async () => {
   const result = await runBackendSlicePipeline();
 
   logger.info('Backend slice pipeline completed', {
-    sourceSeedCreated: result.sourceSeed.created,
     sourceIngestionCount: result.ingestion.length,
     normalizedCount: result.normalization.normalizedCount,
-    storiesGenerated: result.clustering.generated
+    storiesGenerated: result.clustering.generated,
+    storiesAttached: result.clustering.attached,
+    storiesFailed: result.clustering.failed
   });
 };
 
