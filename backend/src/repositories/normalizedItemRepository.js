@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { env } from '../config/env.js';
 import { getDb } from '../config/database.js';
 import { NORMALIZED_ITEM_COLLECTION } from '../models/NormalizedItem.js';
 
@@ -8,6 +9,8 @@ const getCollection = async () => {
 };
 
 const toObjectId = (value) => (value instanceof ObjectId ? value : new ObjectId(value));
+
+const toDate = (value) => (value ? new Date(value) : new Date());
 
 export const upsertNormalizedItem = async (item) => {
   const collection = await getCollection();
@@ -71,10 +74,9 @@ export const findUnclusteredNormalizedItems = async (limit = 250) => {
     .toArray();
 };
 
-
 export const buildCandidateArticleQuery = (article, options = {}) => {
   const candidateWindowHours = Number(options.candidateWindowHours ?? 72);
-  const publishedAt = article.publishedAt ? new Date(article.publishedAt) : new Date();
+  const publishedAt = toDate(article.publishedAt);
   const windowStart = new Date(publishedAt.getTime() - candidateWindowHours * 60 * 60 * 1000);
   const articleId = article._id ? toObjectId(article._id) : null;
 
@@ -103,12 +105,110 @@ export const findRecentCandidateArticles = async (article, options = {}) => {
         storyId: 1,
         sourceId: 1,
         publishedAt: 1,
-        title: 1
+        title: 1,
+        canonicalUrl: 1
       }
     })
     .sort({ publishedAt: -1 })
     .limit(maxCandidateArticles)
     .toArray();
+};
+
+export const buildNearestVectorPipeline = ({
+  articleId,
+  embedding,
+  publishedAt,
+  candidateWindowHours,
+  limit,
+  numCandidates,
+  indexName
+}) => {
+  const articleObjectId = articleId ? toObjectId(articleId) : null;
+  const publishedAtDate = toDate(publishedAt);
+  const windowStart = new Date(publishedAtDate.getTime() - Number(candidateWindowHours) * 60 * 60 * 1000);
+
+  const vectorFilter = {
+    embedding: { $exists: true },
+    publishedAt: {
+      $gte: windowStart,
+      $lte: publishedAtDate
+    }
+  };
+
+  if (articleObjectId) {
+    vectorFilter._id = { $ne: articleObjectId };
+  }
+
+  return [
+    {
+      $vectorSearch: {
+        index: indexName,
+        path: 'embedding',
+        queryVector: embedding,
+        numCandidates: Number(numCandidates),
+        limit: Number(limit),
+        filter: vectorFilter
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        storyId: 1,
+        sourceId: 1,
+        publishedAt: 1,
+        title: 1,
+        canonicalUrl: 1,
+        similarity: { $meta: 'vectorSearchScore' }
+      }
+    }
+  ];
+};
+
+export const findNearestCandidateArticlesByVector = async ({
+  articleId,
+  embedding,
+  publishedAt,
+  candidateWindowHours = env.CANDIDATE_WINDOW_HOURS,
+  limit = env.MAX_NEAREST_ARTICLES,
+  numCandidates = env.VECTOR_NUM_CANDIDATES,
+  indexName = env.VECTOR_SEARCH_INDEX_NAME
+}) => {
+  if (!Array.isArray(embedding) || !embedding.length) {
+    return [];
+  }
+
+  const collection = await getCollection();
+  const pipeline = buildNearestVectorPipeline({
+    articleId,
+    embedding,
+    publishedAt,
+    candidateWindowHours,
+    limit,
+    numCandidates,
+    indexName
+  });
+
+  const candidates = await collection.aggregate(pipeline).toArray();
+
+  const windowStart = new Date(toDate(publishedAt).getTime() - Number(candidateWindowHours) * 60 * 60 * 1000);
+  const publishedAtDate = toDate(publishedAt);
+
+  return candidates.filter((candidate) => {
+    const candidatePublishedAt = candidate.publishedAt ? new Date(candidate.publishedAt) : null;
+    if (!candidatePublishedAt) {
+      return false;
+    }
+
+    if (candidatePublishedAt < windowStart || candidatePublishedAt > publishedAtDate) {
+      return false;
+    }
+
+    if (articleId && String(candidate._id) === String(articleId)) {
+      return false;
+    }
+
+    return true;
+  });
 };
 
 export const markNormalizedItemsClustered = async (ids, clusterKey) => {
