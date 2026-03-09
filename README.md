@@ -121,6 +121,7 @@ zenadam/
 - `backend/docs/ingestion-architecture.md`
 - `backend/docs/source-audit.md`
 - `backend/docs/source-prune.md`
+- `backend/docs/incremental-clustering.md`
 - `backend/examples/source-configs.json`
 
 ## Next implementation phases

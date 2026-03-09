@@ -26,7 +26,8 @@
     "prune:sources": "node scripts/prune-failed-sources.js",
     "cron": "node src/workers/cron.js",
     "test": "node --test",
-    "lint": "echo 'linting not configured yet'"
+    "lint": "echo 'linting not configured yet'",
+    "backfill:embeddings": "node scripts/backfill-embeddings.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

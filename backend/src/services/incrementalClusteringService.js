@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import {
+  findNearestCandidateArticlesByVector,
   findRecentCandidateArticles,
   markNormalizedItemClusteringFailed,
   markNormalizedItemClusteringResult,
@@ -75,7 +76,6 @@ export const evaluateStoryCandidates = (article, nearestCandidates) => {
   return best;
 };
 
-
 export const selectClusteringAction = ({ bestStoryScore, strongThreshold }) => {
   if (bestStoryScore >= strongThreshold) {
     return 'attach';
@@ -84,107 +84,190 @@ export const selectClusteringAction = ({ bestStoryScore, strongThreshold }) => {
   return 'create';
 };
 
-export const clusterArticleIncrementally = async (article) => {
-  if (article.clusteringStatus === 'clustered') {
-    return { skipped: true, reason: 'already_clustered' };
-  }
+const toFiniteSimilarity = (value) => {
+  const similarity = Number(value);
+  return Number.isFinite(similarity) ? similarity : 0;
+};
 
-  try {
-    let embedding = article.embedding;
+export const createIncrementalClusteringRunner = (overrides = {}) => {
+  const resolvedEnv = overrides.env ?? env;
+  const resolvedDeps = {
+    findNearestCandidateArticlesByVector: overrides.findNearestCandidateArticlesByVector ?? findNearestCandidateArticlesByVector,
+    findRecentCandidateArticles: overrides.findRecentCandidateArticles ?? findRecentCandidateArticles,
+    markNormalizedItemClusteringFailed: overrides.markNormalizedItemClusteringFailed ?? markNormalizedItemClusteringFailed,
+    markNormalizedItemClusteringResult: overrides.markNormalizedItemClusteringResult ?? markNormalizedItemClusteringResult,
+    updateNormalizedItemEmbedding: overrides.updateNormalizedItemEmbedding ?? updateNormalizedItemEmbedding,
+    attachArticleToStory: overrides.attachArticleToStory ?? attachArticleToStory,
+    createStoryFromArticle: overrides.createStoryFromArticle ?? createStoryFromArticle,
+    buildArticleEmbedding: overrides.buildArticleEmbedding ?? buildArticleEmbedding,
+    cosineSimilarity: overrides.cosineSimilarity ?? cosineSimilarity,
+    generateEmbedding: overrides.generateEmbedding ?? generateEmbedding
+  };
 
-    if (!Array.isArray(embedding) || !embedding.length) {
-      const embeddingText = buildArticleEmbedding(article);
-      logger.info('Generating embedding for normalized article', {
-        normalizedItemId: String(article._id),
-        embeddingModel: env.ZENADAM_EMBEDDING_MODEL
-      });
-      embedding = await generateEmbedding(embeddingText);
-      await updateNormalizedItemEmbedding(article._id, {
-        embedding,
-        embeddingModel: env.ZENADAM_EMBEDDING_MODEL,
-        embeddingCreatedAt: new Date()
-      });
-    }
-
-    const candidates = await findRecentCandidateArticles(article, {
-      candidateWindowHours: env.CANDIDATE_WINDOW_HOURS,
-      maxCandidateArticles: env.MAX_CANDIDATE_ARTICLES
-    });
-
-    logger.info('Retrieved clustering candidates', {
-      normalizedItemId: String(article._id),
-      candidateCount: candidates.length,
-      candidateWindowHours: env.CANDIDATE_WINDOW_HOURS
+  const getFallbackNearestCandidates = async (article, embedding) => {
+    const candidates = await resolvedDeps.findRecentCandidateArticles(article, {
+      candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS,
+      maxCandidateArticles: resolvedEnv.MAX_CANDIDATE_ARTICLES
     });
 
     const nearestCandidates = candidates
       .map((candidate) => ({
         ...candidate,
-        similarity: cosineSimilarity(embedding, candidate.embedding)
+        similarity: resolvedDeps.cosineSimilarity(embedding, candidate.embedding)
       }))
-      .filter((candidate) => candidate.similarity >= env.SIMILARITY_BORDERLINE_THRESHOLD)
+      .filter((candidate) => candidate.similarity >= resolvedEnv.SIMILARITY_BORDERLINE_THRESHOLD)
       .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, env.MAX_NEAREST_ARTICLES);
+      .slice(0, resolvedEnv.MAX_NEAREST_ARTICLES);
 
-    logger.info('Calculated nearest article similarities', {
-      normalizedItemId: String(article._id),
-      nearestCount: nearestCandidates.length,
-      topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
+    return { candidates, nearestCandidates };
+  };
+
+  const getVectorNearestCandidates = async (article, embedding) => {
+    return resolvedDeps.findNearestCandidateArticlesByVector({
+      articleId: article._id,
+      embedding,
+      publishedAt: article.publishedAt,
+      candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS,
+      limit: resolvedEnv.MAX_NEAREST_ARTICLES,
+      numCandidates: resolvedEnv.VECTOR_NUM_CANDIDATES,
+      indexName: resolvedEnv.VECTOR_SEARCH_INDEX_NAME
     });
+  };
 
-    const bestStory = evaluateStoryCandidates(article, nearestCandidates);
+  return async (article) => {
+    if (article.clusteringStatus === 'clustered') {
+      return { skipped: true, reason: 'already_clustered' };
+    }
 
-    if (bestStory && selectClusteringAction({ bestStoryScore: bestStory.score, strongThreshold: env.SIMILARITY_STRONG_THRESHOLD }) === 'attach') {
-      const updatedStory = await attachArticleToStory({
-        storyId: bestStory.storyId,
-        article
-      });
+    try {
+      let embedding = article.embedding;
 
-      await markNormalizedItemClusteringResult(article._id, {
-        storyId: bestStory.storyId,
+      if (!Array.isArray(embedding) || !embedding.length) {
+        const embeddingText = resolvedDeps.buildArticleEmbedding(article);
+        logger.info('Generating embedding for normalized article', {
+          normalizedItemId: String(article._id),
+          embeddingModel: resolvedEnv.ZENADAM_EMBEDDING_MODEL
+        });
+        embedding = await resolvedDeps.generateEmbedding(embeddingText);
+        await resolvedDeps.updateNormalizedItemEmbedding(article._id, {
+          embedding,
+          embeddingModel: resolvedEnv.ZENADAM_EMBEDDING_MODEL,
+          embeddingCreatedAt: new Date()
+        });
+      }
+
+      let nearestCandidates = [];
+      let lookupMethod = 'vector_search';
+
+      if (resolvedEnv.VECTOR_SEARCH_ENABLED) {
+        try {
+          logger.info('Executing vector search for incremental clustering', {
+            normalizedItemId: String(article._id),
+            vectorIndexName: resolvedEnv.VECTOR_SEARCH_INDEX_NAME,
+            vectorNumCandidates: resolvedEnv.VECTOR_NUM_CANDIDATES,
+            nearestLimit: resolvedEnv.MAX_NEAREST_ARTICLES,
+            candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS
+          });
+
+          const vectorCandidates = await getVectorNearestCandidates(article, embedding);
+          nearestCandidates = vectorCandidates
+            .map((candidate) => ({ ...candidate, similarity: toFiniteSimilarity(candidate.similarity) }))
+            .filter((candidate) => candidate.similarity >= resolvedEnv.SIMILARITY_BORDERLINE_THRESHOLD)
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, resolvedEnv.MAX_NEAREST_ARTICLES);
+
+          logger.info('Vector search candidate retrieval completed', {
+            normalizedItemId: String(article._id),
+            candidateCount: vectorCandidates.length,
+            nearestCount: nearestCandidates.length,
+            topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
+          });
+        } catch (error) {
+          lookupMethod = 'recent_scan_fallback';
+          logger.warn('Vector search unavailable, falling back to recent-scan cosine flow', {
+            normalizedItemId: String(article._id),
+            message: error.message
+          });
+        }
+      } else {
+        lookupMethod = 'recent_scan_fallback';
+        logger.info('Vector search disabled via env; using fallback cosine scan', {
+          normalizedItemId: String(article._id)
+        });
+      }
+
+      if (lookupMethod === 'recent_scan_fallback') {
+        const { candidates, nearestCandidates: fallbackNearest } = await getFallbackNearestCandidates(article, embedding);
+        nearestCandidates = fallbackNearest;
+
+        logger.info('Fallback candidate retrieval completed', {
+          normalizedItemId: String(article._id),
+          candidateCount: candidates.length,
+          nearestCount: nearestCandidates.length,
+          topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
+        });
+      }
+
+      const bestStory = evaluateStoryCandidates(article, nearestCandidates);
+
+      if (bestStory && selectClusteringAction({ bestStoryScore: bestStory.score, strongThreshold: resolvedEnv.SIMILARITY_STRONG_THRESHOLD }) === 'attach') {
+        const updatedStory = await resolvedDeps.attachArticleToStory({
+          storyId: bestStory.storyId,
+          article
+        });
+
+        await resolvedDeps.markNormalizedItemClusteringResult(article._id, {
+          storyId: bestStory.storyId,
+          clusteredAt: new Date(),
+          clusteringStatus: 'clustered',
+          clusteringScore: bestStory.score,
+          clusteringMetadata: {
+            lookupMethod,
+            bestSimilarity: bestStory.bestSimilarity,
+            supportCount: bestStory.supportCount,
+            recencyHours: bestStory.recencyHours
+          }
+        });
+
+        logger.info('Attached article to existing story', {
+          normalizedItemId: String(article._id),
+          storyId: bestStory.storyId,
+          score: bestStory.score,
+          lookupMethod
+        });
+
+        return { action: 'attached', storyId: bestStory.storyId, score: bestStory.score, story: updatedStory };
+      }
+
+      const story = await resolvedDeps.createStoryFromArticle(article);
+      await resolvedDeps.markNormalizedItemClusteringResult(article._id, {
+        storyId: story._id,
         clusteredAt: new Date(),
         clusteringStatus: 'clustered',
-        clusteringScore: bestStory.score,
+        clusteringScore: bestStory?.score ?? 0,
         clusteringMetadata: {
-          bestSimilarity: bestStory.bestSimilarity,
-          supportCount: bestStory.supportCount,
-          recencyHours: bestStory.recencyHours
+          lookupMethod,
+          reason: 'no_strong_story_match',
+          bestCandidateScore: bestStory?.score ?? null
         }
       });
 
-      logger.info('Attached article to existing story', {
+      logger.info('Created new story from article', {
         normalizedItemId: String(article._id),
-        storyId: bestStory.storyId,
-        score: bestStory.score
+        storyId: String(story._id),
+        lookupMethod
       });
 
-      return { action: 'attached', storyId: bestStory.storyId, score: bestStory.score, story: updatedStory };
+      return { action: 'created', storyId: String(story._id), score: bestStory?.score ?? 0, story };
+    } catch (error) {
+      await resolvedDeps.markNormalizedItemClusteringFailed(article._id, error.message);
+      logger.error('Incremental clustering failed', {
+        normalizedItemId: String(article._id),
+        message: error.message
+      });
+      return { action: 'failed', error: error.message };
     }
-
-    const story = await createStoryFromArticle(article);
-    await markNormalizedItemClusteringResult(article._id, {
-      storyId: story._id,
-      clusteredAt: new Date(),
-      clusteringStatus: 'clustered',
-      clusteringScore: bestStory?.score ?? 0,
-      clusteringMetadata: {
-        reason: 'no_strong_story_match',
-        bestCandidateScore: bestStory?.score ?? null
-      }
-    });
-
-    logger.info('Created new story from article', {
-      normalizedItemId: String(article._id),
-      storyId: String(story._id)
-    });
-
-    return { action: 'created', storyId: String(story._id), score: bestStory?.score ?? 0, story };
-  } catch (error) {
-    await markNormalizedItemClusteringFailed(article._id, error.message);
-    logger.error('Incremental clustering failed', {
-      normalizedItemId: String(article._id),
-      message: error.message
-    });
-    return { action: 'failed', error: error.message };
-  }
+  };
 };
+
+export const clusterArticleIncrementally = createIncrementalClusteringRunner();
