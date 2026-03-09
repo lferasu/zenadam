@@ -48,38 +48,6 @@ Create an Atlas Vector Search index on collection `normalized_items`:
 
 ## Backfill / migration notes
 
-### Backfill command (recommended rollout)
-
-1. Keep vector search disabled during backfill:
-
-```bash
-VECTOR_SEARCH_ENABLED=false
-```
-
-2. Dry-run to estimate throughput/count:
-
-```bash
-cd backend
-npm run backfill:embeddings -- --dry-run --batch-size=100 --limit=500
-```
-
-3. Run real backfill:
-
-```bash
-cd backend
-npm run backfill:embeddings -- --batch-size=100
-```
-
-4. Resume from a checkpoint id if interrupted:
-
-```bash
-cd backend
-npm run backfill:embeddings -- --batch-size=100 --from-id=<last_processed_object_id>
-```
-
-The script writes `embedding`, `embeddingModel`, and `embeddingCreatedAt` on `normalized_items` documents where embeddings are missing or empty.
-
-
 - Backfill embeddings for old `normalized_items` without `embedding` before enabling vector-first clustering in production.
 - Existing stories created with old `clusterKey` flow can coexist temporarily; new incremental writes use `storyId` linkage on normalized items.
 - Old records without `storyId` will be considered as candidates but only contribute to scoring after they are attached to a story.
