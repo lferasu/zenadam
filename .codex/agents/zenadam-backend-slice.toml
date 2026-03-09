@@ -1,0 +1,10 @@
+name = "zenadam-backend-slice"
+description = "Implements the first Zenadam backend vertical slice: source → ingest → normalize → cluster → story → /feed"
+
+model = "gpt-5-codex"
+
+prompt_file = ".codex/prompts/zenadam-backend-slice.md"
+
+tools = ["filesystem", "repo_browser"]
+
+temperature = 0.1
