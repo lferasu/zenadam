@@ -8,6 +8,8 @@ export const createNormalizedItemIndexes = async (db) => {
     collection.createIndex({ sourceId: 1, publishedAt: -1 }),
     collection.createIndex({ dedupeHash: 1 }),
     collection.createIndex({ language: 1, clusterKey: 1 }),
-    collection.createIndex({ clusteredAt: 1 })
+    collection.createIndex({ clusteredAt: 1 }),
+    collection.createIndex({ clusteringStatus: 1, publishedAt: -1 }),
+    collection.createIndex({ embeddingCreatedAt: -1 })
   ]);
 };
