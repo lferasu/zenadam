@@ -23,6 +23,30 @@ export const findActiveSourcesByType = async (type) => {
   return collection.find(query).toArray();
 };
 
+export const updateSourceAuditState = async (sourceId, auditState) => {
+  const collection = await getCollection();
+  const now = new Date();
+
+  await collection.updateOne(
+    { _id: new ObjectId(sourceId) },
+    {
+      $set: {
+        healthStatus: auditState.healthStatus,
+        healthReason: auditState.healthReason ?? null,
+        healthFreshness: auditState.healthFreshness ?? null,
+        healthScrapable: auditState.healthScrapable ?? null,
+        healthItemCount: auditState.healthItemCount ?? null,
+        healthLastCheckedAt: now,
+        healthLastSuccessfulFetchAt: auditState.healthLastSuccessfulFetchAt ?? null,
+        updatedAt: now
+      },
+      ...(auditState.incrementFailureCount
+        ? { $inc: { healthFailureCount: 1 } }
+        : {})
+    }
+  );
+};
+
 export const upsertSourceBySlug = async (source) => {
   const collection = await getCollection();
   const now = new Date();
@@ -50,4 +74,18 @@ export const upsertSourceBySlug = async (source) => {
 export const findSourceById = async (id) => {
   const collection = await getCollection();
   return collection.findOne({ _id: new ObjectId(id) });
+};
+
+export const deleteSourcesByIds = async (sourceIds = []) => {
+  if (!sourceIds.length) {
+    return { deletedCount: 0 };
+  }
+
+  const collection = await getCollection();
+  const objectIds = sourceIds.map((id) => new ObjectId(id));
+  const result = await collection.deleteMany({ _id: { $in: objectIds } });
+
+  return {
+    deletedCount: Number(result.deletedCount ?? 0)
+  };
 };

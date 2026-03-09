@@ -52,9 +52,12 @@ zenadam/
 - Express API bootstrap with shared JSON envelope shape.
 - Health route at `GET /api/v1/health`.
 - Feed route at `GET /api/v1/feed` with optional `?limit=<n>`.
-- Default source seeding for `bbc-amharic`.
-- RSS ingestion for BBC Amharic feed entries.
+- Source-type ingestion dispatch (`rss`, `scraper`, `api`) with RSS fully implemented.
+- Default source seeding script for `bbc-amharic`.
+- RSS ingestion for configured active feed sources.
 - Normalization + story clustering pipeline to produce feed-ready stories.
+- Source audit tooling (RSS + scraper health checks, JSON report output).
+- Source prune tooling (dry-run/apply removal of failed sources).
 - Worker entrypoints:
   - `npm run worker`
   - `npm run worker:ingestion`
@@ -63,6 +66,8 @@ zenadam/
   - `npm run worker:normalize`
   - `npm run worker:cluster`
   - `npm run worker:pipeline`
+  - `npm run audit:sources`
+  - `npm run prune:sources`
   - `npm run cron`
 - Render deployment template for API + worker + cron.
 - Environment variable contract in `.env.example`.
@@ -94,14 +99,29 @@ zenadam/
    ```bash
    npm run pipeline
    ```
-7. Check health:
+7. Audit active sources:
+   ```bash
+   npm run audit:sources
+   ```
+8. Dry-run prune failed sources:
+   ```bash
+   npm run prune:sources
+   ```
+9. Check health:
    ```bash
    curl http://localhost:3000/api/v1/health
    ```
-8. Fetch feed stories:
+10. Fetch feed stories:
    ```bash
    curl 'http://localhost:3000/api/v1/feed?limit=10'
    ```
+
+## Operational docs
+
+- `backend/docs/ingestion-architecture.md`
+- `backend/docs/source-audit.md`
+- `backend/docs/source-prune.md`
+- `backend/examples/source-configs.json`
 
 ## Next implementation phases
 
