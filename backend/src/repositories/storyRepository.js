@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { env } from '../config/env.js';
 import { getDb } from '../config/database.js';
 import { STORY_COLLECTION, STORY_STATUS } from '../models/Story.js';
 
@@ -120,9 +121,16 @@ export const attachArticleToStory = async ({ storyId, article }) => {
 
 export const listActiveStories = async ({ limit = 50 } = {}) => {
   const collection = await getCollection();
+  const query = { status: STORY_STATUS.ACTIVE };
+  const maxAgeDays = Number(env.STORY_MAX_AGE_DAYS ?? 0);
+
+  if (maxAgeDays > 0) {
+    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+    query.updatedAt = { $gte: cutoff };
+  }
 
   return collection
-    .find({ status: STORY_STATUS.ACTIVE })
+    .find(query)
     .sort({ updatedAt: -1 })
     .limit(limit)
     .toArray();
