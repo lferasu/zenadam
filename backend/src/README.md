@@ -132,3 +132,43 @@ Example:
   "error": null
 }
 ```
+
+## Normalization and story summary refresh
+
+Zenadam keeps ingestion raw, then runs post-ingestion enrichment in two independent layers:
+
+1. **Source item normalization/enrichment** (worker: `npm run worker:normalize`)
+   - Detects `sourceLanguage`
+   - Resolves `targetLanguage` from `ZENADAM_TARGET_LANGUAGE` (default `am`)
+   - Persists `normalizedTitle` and `normalizedDetailedSummary` on each source item
+   - Tracks status with `normalizationStatus` (`pending | processing | ready | failed`)
+
+2. **Story summary refresh** (hooked to clustering)
+   - On story creation and story attachment, refreshes story presentation fields in target language
+   - Persists `storyTitle`, `storySummary`, `targetLanguage`
+   - Tracks status with `storySummaryStatus` (`pending | processing | ready | stale | failed`)
+
+### New env vars
+
+- `ZENADAM_TARGET_LANGUAGE=am`
+- `ZENADAM_ENABLE_NORMALIZATION=true`
+- `ZENADAM_ENABLE_STORY_SUMMARY_REFRESH=true`
+- `ZENADAM_NORMALIZATION_BATCH_LIMIT=100`
+
+### Local pipeline run
+
+From `backend/`:
+
+```bash
+npm run worker:ingestion
+npm run worker:normalize
+npm run worker:cluster
+```
+
+Or run the full pass in one shot:
+
+```bash
+npm run worker:pipeline
+```
+
+To deploy in another product language, set `ZENADAM_TARGET_LANGUAGE` to that language code (for example `en`) without changing business logic.

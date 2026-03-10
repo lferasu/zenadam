@@ -1,25 +1,21 @@
-import { findItemsByIngestStatus, markSourceItemNormalized } from '../repositories/sourceItemRepository.js';
+import { env } from '../config/env.js';
+import { generateSourceItemNormalization } from '../ai/index.js';
+import {
+  findPendingNormalizationSourceItems,
+  markSourceItemNormalizationFailed,
+  markSourceItemNormalizationProcessing,
+  markSourceItemNormalizationReady
+} from '../repositories/sourceItemRepository.js';
 import { upsertNormalizedItem } from '../repositories/normalizedItemRepository.js';
-import { SOURCE_ITEM_INGEST_STATUS } from '../models/SourceItem.js';
 import { buildDedupeHash } from '../utils/hash.js';
 import { normalizeText, pickKeywords } from '../utils/text.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
 
-export const detectLanguage = (text = '') => {
-  const amharicRegex = /[\u1200-\u137F]/;
-  if (amharicRegex.test(text)) {
-    return 'am';
-  }
-
-  return 'en';
-};
-
-const normalizeSourceItem = (item) => {
+const buildNormalizedRecord = (item, language) => {
   const normalizedTitle = normalizeText(item.title || '');
   const normalizedContent = normalizeText(item.rawText || item.title || '');
   const snippet = normalizedContent.slice(0, 280) || normalizedTitle;
   const publishedAt = item.publishedAt ?? item.fetchedAt ?? null;
-  const language = detectLanguage(`${normalizedTitle} ${normalizedContent}`);
 
   return {
     sourceItemId: item._id,
@@ -41,21 +37,52 @@ const normalizeSourceItem = (item) => {
   };
 };
 
-export const normalizePendingSourceItems = async ({ limit = 100 } = {}) => {
+export const normalizePendingSourceItems = async ({ limit = env.ZENADAM_NORMALIZATION_BATCH_LIMIT } = {}) => {
   await ensureRuntimeInitialized();
 
-  const sourceItems = await findItemsByIngestStatus(SOURCE_ITEM_INGEST_STATUS.FETCHED, limit);
+  if (!env.ZENADAM_ENABLE_NORMALIZATION) {
+    return {
+      scanned: 0,
+      normalizedCount: 0,
+      skipped: true,
+      reason: 'normalization_disabled'
+    };
+  }
+
+  const sourceItems = await findPendingNormalizationSourceItems(limit);
   let normalizedCount = 0;
+  let failedCount = 0;
 
   for (const sourceItem of sourceItems) {
-    const normalized = normalizeSourceItem(sourceItem);
-    await upsertNormalizedItem(normalized);
-    await markSourceItemNormalized(sourceItem._id);
-    normalizedCount += 1;
+    try {
+      await markSourceItemNormalizationProcessing(sourceItem._id);
+      const targetLanguage = env.ZENADAM_TARGET_LANGUAGE;
+      const normalization = await generateSourceItemNormalization({
+        title: sourceItem.title || '',
+        body: sourceItem.rawText || '',
+        targetLanguage
+      });
+
+      const normalized = buildNormalizedRecord(sourceItem, normalization.sourceLanguage);
+      await upsertNormalizedItem(normalized);
+
+      await markSourceItemNormalizationReady(sourceItem._id, {
+        sourceLanguage: normalization.sourceLanguage,
+        targetLanguage,
+        normalizedTitle: normalization.normalizedTitle,
+        normalizedDetailedSummary: normalization.normalizedDetailedSummary
+      });
+
+      normalizedCount += 1;
+    } catch (error) {
+      failedCount += 1;
+      await markSourceItemNormalizationFailed(sourceItem._id, error.message);
+    }
   }
 
   return {
     scanned: sourceItems.length,
-    normalizedCount
+    normalizedCount,
+    failedCount
   };
 };

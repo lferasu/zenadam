@@ -25,6 +25,11 @@ export const env = {
   AI_EMBEDDING_MODEL: process.env.AI_EMBEDDING_MODEL ?? '',
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '',
   ZENADAM_EMBEDDING_MODEL: process.env.ZENADAM_EMBEDDING_MODEL ?? 'text-embedding-3-large',
+  ZENADAM_TARGET_LANGUAGE: process.env.ZENADAM_TARGET_LANGUAGE ?? 'am',
+  ZENADAM_ENABLE_NORMALIZATION: (process.env.ZENADAM_ENABLE_NORMALIZATION ?? 'true').toLowerCase() === 'true',
+  ZENADAM_ENABLE_STORY_SUMMARY_REFRESH:
+    (process.env.ZENADAM_ENABLE_STORY_SUMMARY_REFRESH ?? 'true').toLowerCase() === 'true',
+  ZENADAM_NORMALIZATION_BATCH_LIMIT: Number(process.env.ZENADAM_NORMALIZATION_BATCH_LIMIT ?? 100),
   VECTOR_SEARCH_ENABLED: (process.env.VECTOR_SEARCH_ENABLED ?? 'true').toLowerCase() === 'true',
   VECTOR_SEARCH_INDEX_NAME: process.env.VECTOR_SEARCH_INDEX_NAME ?? 'normalized_item_embedding_index',
   VECTOR_NUM_CANDIDATES: Number(process.env.VECTOR_NUM_CANDIDATES ?? 100),
