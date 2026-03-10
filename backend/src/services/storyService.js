@@ -3,8 +3,10 @@ import { STORY_STATUS } from '../models/Story.js';
 import { findUnclusteredNormalizedItems, markNormalizedItemsClustered } from '../repositories/normalizedItemRepository.js';
 import {
   findStoryForInspectionById,
+  findStoryWithAllItemTitlesById,
   listActiveStories,
   listStoriesForInspection,
+  listStoriesWithAllItemTitles,
   upsertStoryByClusterKey
 } from '../repositories/storyRepository.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
@@ -149,6 +151,57 @@ export const mapInspectionStoryArticle = (article, includeDebug) => {
   }
 
   return mapped;
+};
+
+
+
+export const getAllStoriesWithItemTitles = async () => {
+  await ensureRuntimeInitialized();
+
+  const stories = await listStoriesWithAllItemTitles();
+
+  return stories.map((story) => ({
+    id: String(story._id),
+    title: story.title,
+    itemCount: story.itemCount ?? 0,
+    createdAt: toIso(story.createdAt),
+    updatedAt: toIso(story.updatedAt),
+    items: (story.items ?? []).map((item) => ({
+      title: item.title
+    }))
+  }));
+};
+
+export const getStoryWithAllItemTitlesById = async ({ id }) => {
+  await ensureRuntimeInitialized();
+
+  if (!ObjectId.isValid(id)) {
+    const error = new Error('Invalid story id');
+    error.code = 'INVALID_STORY_ID';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const story = await findStoryWithAllItemTitlesById({ id });
+
+  if (!story) {
+    const error = new Error('Story not found');
+    error.code = 'STORY_NOT_FOUND';
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    id: String(story._id),
+    title: story.title,
+    summary: story.summary ?? null,
+    itemCount: story.itemCount ?? 0,
+    createdAt: toIso(story.createdAt),
+    updatedAt: toIso(story.updatedAt),
+    items: (story.items ?? []).map((item) => ({
+      title: item.title
+    }))
+  };
 };
 
 export const getStoryForInspectionById = async ({ id, debug = false }) => {

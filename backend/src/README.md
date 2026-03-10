@@ -132,3 +132,12 @@ Example:
   "error": null
 }
 ```
+
+
+### GET `/stories-with-items`
+
+Returns all active stories with all story items, where each item includes only `title`.
+
+### GET `/stories-with-items/:id`
+
+Returns a single active story with all its items, where each item includes only `title`.

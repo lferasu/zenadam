@@ -330,6 +330,81 @@ export const findStoryForInspectionById = async ({ id }) => {
   return story ?? null;
 };
 
+
+
+export const listStoriesWithAllItemTitles = async () => {
+  const collection = await getCollection();
+
+  return collection
+    .aggregate([
+      { $match: { status: STORY_STATUS.ACTIVE } },
+      { $sort: { updatedAt: -1, _id: -1 } },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            { $sort: { publishedAt: -1, createdAt: -1 } },
+            { $project: { _id: 0, title: 1 } }
+          ],
+          as: 'items'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          itemCount: { $size: { $ifNull: ['$itemIds', []] } },
+          items: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      }
+    ])
+    .toArray();
+};
+
+export const findStoryWithAllItemTitlesById = async ({ id }) => {
+  const collection = await getCollection();
+
+  const [story] = await collection
+    .aggregate([
+      {
+        $match: {
+          _id: toObjectId(id),
+          status: STORY_STATUS.ACTIVE
+        }
+      },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            { $sort: { publishedAt: -1, createdAt: -1 } },
+            { $project: { _id: 0, title: 1 } }
+          ],
+          as: 'items'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          summary: 1,
+          itemCount: { $size: { $ifNull: ['$itemIds', []] } },
+          items: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      }
+    ])
+    .toArray();
+
+  return story ?? null;
+};
+
 export const listSingletonStories = async ({ limit = 200, since } = {}) => {
   const collection = await getCollection();
   const match = { status: STORY_STATUS.ACTIVE };

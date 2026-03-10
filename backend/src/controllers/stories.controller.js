@@ -1,4 +1,9 @@
-import { getStoriesForInspection, getStoryForInspectionById } from '../services/storyService.js';
+import {
+  getAllStoriesWithItemTitles,
+  getStoriesForInspection,
+  getStoryForInspectionById,
+  getStoryWithAllItemTitlesById
+} from '../services/storyService.js';
 
 const parsePositiveInt = ({ raw, defaultValue, minimum = 1, maximum = Number.MAX_SAFE_INTEGER, errorCode, errorMessage }) => {
   const value = Number(raw ?? defaultValue);
@@ -98,6 +103,40 @@ export const getStoryById = async (req, res, next) => {
       meta: {
         requestId: req.requestId,
         debug
+      },
+      error: null
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const getStoriesWithItems = async (req, res, next) => {
+  try {
+    const stories = await getAllStoriesWithItemTitles();
+
+    res.json({
+      data: stories,
+      meta: {
+        requestId: req.requestId,
+        total: stories.length
+      },
+      error: null
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getStoryWithItemsById = async (req, res, next) => {
+  try {
+    const story = await getStoryWithAllItemTitlesById({ id: req.params.id });
+
+    res.json({
+      data: story,
+      meta: {
+        requestId: req.requestId
       },
       error: null
     });
