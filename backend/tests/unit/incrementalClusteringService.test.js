@@ -47,7 +47,7 @@ test('buildNearestVectorPipeline includes vector stage filter and projection', (
   });
 
   assert.equal(pipeline[0].$vectorSearch.path, 'embedding');
-  assert.equal(pipeline[0].$vectorSearch.filter._id.$ne.toString(), articleId.toString());
+  assert.equal(Object.prototype.hasOwnProperty.call(pipeline[0].$vectorSearch.filter, '_id'), false);
   assert.equal(pipeline[0].$vectorSearch.filter.publishedAt.$lte.toISOString(), publishedAt.toISOString());
   assert.equal(pipeline[1].$project.similarity.$meta, 'vectorSearchScore');
 });

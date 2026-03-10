@@ -19,9 +19,21 @@ Expected env vars:
 - `VECTOR_SEARCH_INDEX_NAME=normalized_item_embedding_index`
 - `VECTOR_NUM_CANDIDATES=100`
 - `CANDIDATE_WINDOW_HOURS=72`
+- `CANDIDATE_FORWARD_WINDOW_HOURS=6`
 - `MAX_NEAREST_ARTICLES=10`
 
 If vector search is unavailable, the service falls back to the prior app-side candidate scan + cosine similarity path.
+
+## Story-level threshold tuning
+
+Story attach decisions are made on the computed story score (not raw cosine alone).
+
+Recommended starting values:
+
+- `SIMILARITY_STRONG_THRESHOLD=0.72`
+- `SIMILARITY_BORDERLINE_THRESHOLD=0.70`
+
+`CANDIDATE_FORWARD_WINDOW_HOURS` allows limited look-ahead so articles published slightly later can still be considered during matching.
 
 ## Atlas index example
 

@@ -135,3 +135,103 @@ export const listActiveStories = async ({ limit = 50 } = {}) => {
     .limit(limit)
     .toArray();
 };
+
+export const listSingletonStories = async ({ limit = 200, since } = {}) => {
+  const collection = await getCollection();
+  const match = { status: STORY_STATUS.ACTIVE };
+
+  if (since) {
+    match.updatedAt = { $gte: new Date(since) };
+  }
+
+  return collection
+    .aggregate([
+      { $match: match },
+      {
+        $addFields: {
+          computedItemCount: { $size: { $ifNull: ['$itemIds', []] } }
+        }
+      },
+      {
+        $match: {
+          computedItemCount: { $lte: 1 }
+        }
+      },
+      { $sort: { updatedAt: -1 } },
+      { $limit: limit }
+    ])
+    .toArray();
+};
+
+export const mergeStoryIntoTarget = async ({ sourceStoryId, targetStoryId }) => {
+  const collection = await getCollection();
+  const now = new Date();
+
+  const sourceId = toObjectId(sourceStoryId);
+  const targetId = toObjectId(targetStoryId);
+
+  const sourceStory = await collection.findOne({ _id: sourceId, status: STORY_STATUS.ACTIVE });
+  if (!sourceStory) {
+    return { merged: false, reason: 'source_story_not_found_or_inactive' };
+  }
+
+  if (String(sourceId) === String(targetId)) {
+    return { merged: false, reason: 'same_story' };
+  }
+
+  const targetResult = await collection.findOneAndUpdate(
+    { _id: targetId, status: STORY_STATUS.ACTIVE },
+    {
+      $addToSet: {
+        itemIds: { $each: sourceStory.itemIds ?? [] },
+        sourceIds: { $each: sourceStory.sourceIds ?? [] }
+      },
+      $max: {
+        lastArticlePublishedAt: sourceStory.lastArticlePublishedAt ?? sourceStory.updatedAt ?? now
+      },
+      $set: {
+        lastSeenAt: now,
+        updatedAt: now
+      }
+    },
+    { returnDocument: 'after' }
+  );
+
+  if (!targetResult) {
+    return { merged: false, reason: 'target_story_not_found_or_inactive' };
+  }
+
+  const articleCount = Array.isArray(targetResult.itemIds) ? targetResult.itemIds.length : 0;
+  const sourceCount = Array.isArray(targetResult.sourceIds) ? targetResult.sourceIds.length : 0;
+
+  const updatedTarget = await collection.findOneAndUpdate(
+    { _id: targetId },
+    {
+      $set: {
+        articleCount,
+        sourceCount,
+        updatedAt: new Date()
+      }
+    },
+    { returnDocument: 'after' }
+  );
+
+  await collection.updateOne(
+    { _id: sourceId },
+    {
+      $set: {
+        status: STORY_STATUS.ARCHIVED,
+        mergedIntoStoryId: targetId,
+        mergedAt: now,
+        updatedAt: now
+      }
+    }
+  );
+
+  return {
+    merged: true,
+    sourceStoryId: String(sourceId),
+    targetStoryId: String(targetId),
+    targetStory: updatedTarget
+  };
+};
