@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb';
 import { env } from '../config/env.js';
 import { getDb } from '../config/database.js';
+import { NORMALIZED_ITEM_COLLECTION } from '../models/NormalizedItem.js';
+import { SOURCE_COLLECTION } from '../models/Source.js';
 import { STORY_COLLECTION, STORY_STATUS } from '../models/Story.js';
 
 const getCollection = async () => {
@@ -134,6 +136,198 @@ export const listActiveStories = async ({ limit = 50 } = {}) => {
     .sort({ updatedAt: -1 })
     .limit(limit)
     .toArray();
+};
+
+const buildStorySort = (sort) => {
+  if (sort === 'created_asc') {
+    return { createdAt: 1, _id: 1 };
+  }
+
+  if (sort === 'created_desc') {
+    return { createdAt: -1, _id: -1 };
+  }
+
+  if (sort === 'article_count_desc') {
+    return { articleCountComputed: -1, latestArticleAt: -1, _id: -1 };
+  }
+
+  return { latestArticleAt: -1, updatedAt: -1, _id: -1 };
+};
+
+export const listStoriesForInspection = async ({
+  page = 1,
+  limit = 25,
+  sort = 'recent',
+  hasSummary,
+  minArticleCount
+} = {}) => {
+  const collection = await getCollection();
+  const skip = (page - 1) * limit;
+
+  const baseMatch = { status: STORY_STATUS.ACTIVE };
+
+  if (hasSummary === true) {
+    baseMatch.summary = { $type: 'string', $ne: '' };
+  } else if (hasSummary === false) {
+    baseMatch.$or = [{ summary: { $exists: false } }, { summary: null }, { summary: '' }];
+  }
+
+  const threshold = Number.isFinite(minArticleCount) ? Number(minArticleCount) : null;
+
+  const pipeline = [
+    { $match: baseMatch },
+    {
+      $addFields: {
+        articleCountComputed: { $size: { $ifNull: ['$itemIds', []] } },
+        latestArticleAt: {
+          $ifNull: ['$lastArticlePublishedAt', '$updatedAt']
+        }
+      }
+    }
+  ];
+
+  if (threshold !== null) {
+    pipeline.push({
+      $match: {
+        articleCountComputed: { $gte: threshold }
+      }
+    });
+  }
+
+  pipeline.push(
+    {
+      $facet: {
+        rows: [
+          { $sort: buildStorySort(sort) },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $lookup: {
+              from: NORMALIZED_ITEM_COLLECTION,
+              let: { itemIds: '$itemIds' },
+              pipeline: [
+                { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+                { $sort: { publishedAt: -1, createdAt: -1 } },
+                { $limit: 3 },
+                {
+                  $lookup: {
+                    from: SOURCE_COLLECTION,
+                    localField: 'sourceId',
+                    foreignField: '_id',
+                    as: 'source'
+                  }
+                },
+                {
+                  $project: {
+                    _id: 0,
+                    title: 1,
+                    publishedAt: 1,
+                    source: {
+                      $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+                    }
+                  }
+                }
+              ],
+              as: 'previewArticles'
+            }
+          },
+          {
+            $project: {
+              _id: 1,
+              title: 1,
+              summary: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              latestArticleAt: 1,
+              articleCount: '$articleCountComputed',
+              previewArticles: 1
+            }
+          }
+        ],
+        totalCount: [{ $count: 'value' }]
+      }
+    }
+  );
+
+  const [result] = await collection.aggregate(pipeline).toArray();
+  const items = result?.rows ?? [];
+  const total = result?.totalCount?.[0]?.value ?? 0;
+
+  return {
+    items,
+    total,
+    page,
+    limit
+  };
+};
+
+export const findStoryForInspectionById = async ({ id }) => {
+  const collection = await getCollection();
+
+  const [story] = await collection
+    .aggregate([
+      {
+        $match: {
+          _id: toObjectId(id),
+          status: STORY_STATUS.ACTIVE
+        }
+      },
+      {
+        $addFields: {
+          articleCountComputed: { $size: { $ifNull: ['$itemIds', []] } }
+        }
+      },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            { $sort: { publishedAt: -1, createdAt: -1 } },
+            {
+              $lookup: {
+                from: SOURCE_COLLECTION,
+                localField: 'sourceId',
+                foreignField: '_id',
+                as: 'source'
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                canonicalUrl: 1,
+                publishedAt: 1,
+                language: 1,
+                createdAt: 1,
+                sourceName: {
+                  $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+                },
+                sourceType: { $arrayElemAt: ['$source.type', 0] },
+                clusteringScore: 1,
+                clusteringMetadata: 1
+              }
+            }
+          ],
+          as: 'articles'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          summary: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          articleCount: '$articleCountComputed',
+          heroArticleId: 1,
+          articles: 1
+        }
+      }
+    ])
+    .toArray();
+
+  return story ?? null;
 };
 
 export const listSingletonStories = async ({ limit = 200, since } = {}) => {
