@@ -76,8 +76,8 @@ const toIso = (value) => (value?.toISOString?.() ? value.toISOString() : null);
 
 export const mapInspectionStoryListItem = (story) => ({
   id: String(story._id),
-  title: story.title,
-  summary: story.summary ?? null,
+  title: story.storyTitle ?? story.title,
+  summary: story.storySummary ?? story.summary ?? null,
   articleCount: story.articleCount ?? 0,
   latestArticleAt: toIso(story.latestArticleAt ?? story.updatedAt),
   createdAt: toIso(story.createdAt),
@@ -95,13 +95,13 @@ export const getFeedStories = async ({ limit = 25 } = {}) => {
 
   return stories.map((story) => ({
     id: String(story._id),
-    title: story.title,
-    summary: story.summary,
+    title: story.storyTitle ?? story.title,
+    summary: story.storySummary ?? story.summary,
     heroImageUrl: null,
     sourceCount: Array.isArray(story.sourceIds) ? story.sourceIds.length : story.sourceCount ?? 0,
     itemCount: Array.isArray(story.itemIds) ? story.itemIds.length : story.articleCount ?? 0,
     updatedAt: story.updatedAt?.toISOString?.() ?? null,
-    language: story.language
+    language: story.targetLanguage ?? story.language
   }));
 };
 
@@ -172,8 +172,8 @@ export const getStoryForInspectionById = async ({ id, debug = false }) => {
 
   const response = {
     id: String(story._id),
-    title: story.title,
-    summary: story.summary ?? null,
+    title: story.storyTitle ?? story.title,
+    summary: story.storySummary ?? story.summary ?? null,
     createdAt: toIso(story.createdAt),
     updatedAt: toIso(story.updatedAt),
     articleCount: story.articleCount ?? 0,

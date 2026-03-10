@@ -96,7 +96,8 @@ test('clusterArticleIncrementally attaches to story using vector candidates', as
     },
     buildArticleEmbedding: () => 'title snippet',
     cosineSimilarity: () => 0,
-    generateEmbedding: async () => [0.2, 0.3]
+    generateEmbedding: async () => [0.2, 0.3],
+    refreshStorySummary: async () => ({ refreshed: true })
   });
 
   const result = await cluster({
@@ -150,7 +151,8 @@ test('clusterArticleIncrementally falls back to scan when vector lookup fails', 
     },
     buildArticleEmbedding: () => 'title snippet',
     cosineSimilarity: () => 0.7,
-    generateEmbedding: async () => [0.2, 0.3]
+    generateEmbedding: async () => [0.2, 0.3],
+    refreshStorySummary: async () => ({ refreshed: true })
   });
 
   const result = await cluster({

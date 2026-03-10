@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { getDb } from '../config/database.js';
 import { NORMALIZED_ITEM_COLLECTION } from '../models/NormalizedItem.js';
 import { SOURCE_COLLECTION } from '../models/Source.js';
-import { STORY_COLLECTION, STORY_STATUS } from '../models/Story.js';
+import { STORY_COLLECTION, STORY_STATUS, STORY_SUMMARY_STATUS } from '../models/Story.js';
 
 const getCollection = async () => {
   const db = await getDb();
@@ -31,6 +31,7 @@ export const upsertStoryByClusterKey = async (story) => {
         summary: story.summary,
         heroItemId,
         status: story.status ?? STORY_STATUS.ACTIVE,
+        targetLanguage: story.targetLanguage ?? env.ZENADAM_TARGET_LANGUAGE,
         updatedAt: now
       },
       $addToSet: {
@@ -70,6 +71,9 @@ export const createStoryFromArticle = async (article) => {
     lastSeenAt: now,
     lastArticlePublishedAt: publishedAt,
     language: article.language ?? 'en',
+    targetLanguage: env.ZENADAM_TARGET_LANGUAGE,
+    storySummaryStatus: STORY_SUMMARY_STATUS.PENDING,
+    storySummaryError: null,
     status: STORY_STATUS.ACTIVE,
     createdAt: now,
     updatedAt: now
@@ -95,6 +99,8 @@ export const attachArticleToStory = async ({ storyId, article }) => {
       },
       $set: {
         lastSeenAt: now,
+        storySummaryStatus: STORY_SUMMARY_STATUS.STALE,
+        storySummaryError: null,
         updatedAt: now
       }
     },
@@ -119,6 +125,72 @@ export const attachArticleToStory = async ({ storyId, article }) => {
     },
     { returnDocument: 'after' }
   );
+};
+
+
+export const updateStorySummaryProcessing = async ({ storyId, targetLanguage = env.ZENADAM_TARGET_LANGUAGE }) => {
+  const collection = await getCollection();
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        targetLanguage,
+        storySummaryStatus: STORY_SUMMARY_STATUS.PROCESSING,
+        storySummaryError: null,
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
+export const updateStorySummaryReady = async ({ storyId, storyTitle, storySummary, targetLanguage = env.ZENADAM_TARGET_LANGUAGE }) => {
+  const collection = await getCollection();
+  const now = new Date();
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        title: storyTitle,
+        summary: storySummary,
+        storyTitle,
+        storySummary,
+        targetLanguage,
+        storySummaryStatus: STORY_SUMMARY_STATUS.READY,
+        storySummaryError: null,
+        storySummaryUpdatedAt: now,
+        updatedAt: now
+      }
+    }
+  );
+};
+
+export const updateStorySummaryFailed = async ({ storyId, error }) => {
+  const collection = await getCollection();
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        storySummaryStatus: STORY_SUMMARY_STATUS.FAILED,
+        storySummaryError: error,
+        storySummaryUpdatedAt: new Date(),
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
+export const listStoryArticlesForSummary = async ({ storyId, limit = 10 }) => {
+  const db = await getDb();
+
+  return db
+    .collection(NORMALIZED_ITEM_COLLECTION)
+    .find({ storyId: toObjectId(storyId) }, { projection: { title: 1, snippet: 1, content: 1, publishedAt: 1 } })
+    .sort({ publishedAt: -1, createdAt: -1 })
+    .limit(limit)
+    .toArray();
 };
 
 export const listActiveStories = async ({ limit = 50 } = {}) => {
@@ -236,6 +308,8 @@ export const listStoriesForInspection = async ({
               _id: 1,
               title: 1,
               summary: 1,
+              storyTitle: 1,
+              storySummary: 1,
               createdAt: 1,
               updatedAt: 1,
               latestArticleAt: 1,
@@ -317,6 +391,8 @@ export const findStoryForInspectionById = async ({ id }) => {
           _id: 1,
           title: 1,
           summary: 1,
+          storyTitle: 1,
+          storySummary: 1,
           createdAt: 1,
           updatedAt: 1,
           articleCount: '$articleCountComputed',
@@ -385,6 +461,8 @@ export const mergeStoryIntoTarget = async ({ sourceStoryId, targetStoryId }) => 
       },
       $set: {
         lastSeenAt: now,
+        storySummaryStatus: STORY_SUMMARY_STATUS.STALE,
+        storySummaryError: null,
         updatedAt: now
       }
     },

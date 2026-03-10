@@ -1,6 +1,10 @@
 import { ObjectId } from 'mongodb';
 import { getDb } from '../config/database.js';
-import { SOURCE_ITEM_COLLECTION, SOURCE_ITEM_INGEST_STATUS } from '../models/SourceItem.js';
+import {
+  SOURCE_ITEM_COLLECTION,
+  SOURCE_ITEM_INGEST_STATUS,
+  SOURCE_ITEM_NORMALIZATION_STATUS
+} from '../models/SourceItem.js';
 
 const getCollection = async () => {
   const db = await getDb();
@@ -23,6 +27,8 @@ export const upsertSourceItem = async (item) => {
       publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
       fetchedAt: item.fetchedAt ? new Date(item.fetchedAt) : now,
       ingestStatus: SOURCE_ITEM_INGEST_STATUS.FETCHED,
+      normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.PENDING,
+      normalizationError: null,
       updatedAt: now
     },
     $setOnInsert: {
@@ -52,6 +58,76 @@ export const findItemsByIngestStatus = async (status, limit = 100) => {
     .sort({ publishedAt: -1, fetchedAt: -1 })
     .limit(limit)
     .toArray();
+};
+
+export const findPendingNormalizationSourceItems = async (limit = 100) => {
+  const collection = await getCollection();
+
+  return collection
+    .find({
+      ingestStatus: SOURCE_ITEM_INGEST_STATUS.FETCHED,
+      $or: [
+        { normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.PENDING },
+        { normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.FAILED },
+        { normalizationStatus: { $exists: false } }
+      ]
+    })
+    .sort({ publishedAt: -1, fetchedAt: -1 })
+    .limit(limit)
+    .toArray();
+};
+
+export const markSourceItemNormalizationProcessing = async (id) => {
+  const collection = await getCollection();
+
+  return collection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.PROCESSING,
+        normalizationError: null,
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
+export const markSourceItemNormalizationReady = async (id, payload) => {
+  const collection = await getCollection();
+  const now = new Date();
+
+  return collection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        ingestStatus: SOURCE_ITEM_INGEST_STATUS.NORMALIZED,
+        sourceLanguage: payload.sourceLanguage,
+        targetLanguage: payload.targetLanguage,
+        normalizedTitle: payload.normalizedTitle,
+        normalizedDetailedSummary: payload.normalizedDetailedSummary,
+        normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.READY,
+        normalizationError: null,
+        normalizationUpdatedAt: now,
+        updatedAt: now
+      }
+    }
+  );
+};
+
+export const markSourceItemNormalizationFailed = async (id, errorMessage) => {
+  const collection = await getCollection();
+
+  return collection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.FAILED,
+        normalizationError: errorMessage,
+        normalizationUpdatedAt: new Date(),
+        updatedAt: new Date()
+      }
+    }
+  );
 };
 
 export const markSourceItemNormalized = async (id) => {
