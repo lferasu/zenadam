@@ -180,11 +180,16 @@ const fetchFeedXml = async (url, fetchConfig = {}) => {
         signal: AbortSignal.timeout(timeoutMs)
       });
 
+      if (response.status === 304) {
+        return { xml: null, notModified: true };
+      }
+
       if (!response.ok) {
         throw new Error(`RSS fetch failed (${response.status}) for ${url}`);
       }
 
-      return response.text();
+      const xml = await response.text();
+      return { xml, notModified: false };
     } catch (error) {
       lastError = error;
 
@@ -225,7 +230,16 @@ export const ingestRssSource = async (source) => {
     };
 
     try {
-      const xml = await fetchFeedXml(entryUrl, source.fetchConfig);
+      const fetchResult = await fetchFeedXml(entryUrl, source.fetchConfig);
+
+      if (fetchResult.notModified) {
+        feedResult.status = 'not_modified';
+        result.totals.feedsSucceeded += 1;
+        result.feeds.push(feedResult);
+        continue;
+      }
+
+      const xml = fetchResult.xml;
       const entries = parseFeedItems(xml);
 
       feedResult.fetchedEntries = entries.length;
@@ -242,7 +256,7 @@ export const ingestRssSource = async (source) => {
           }
 
           const upsertResult = await upsertSourceItem(mapped);
-          const wasInserted = !upsertResult.lastErrorObject?.updatedExisting;
+          const wasInserted = Boolean(upsertResult.inserted);
 
           if (wasInserted) {
             feedResult.inserted += 1;

@@ -24,6 +24,7 @@
     "pipeline": "node src/workers/pipeline.worker.js",
     "audit:sources": "node scripts/audit-sources.js",
     "prune:sources": "node scripts/prune-failed-sources.js",
+    "reconcile:stories": "node scripts/reconcile-stories.js",
     "cron": "node src/workers/cron.js",
     "test": "node --test",
     "lint": "echo 'linting not configured yet'",

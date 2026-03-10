@@ -1,3 +1,5 @@
+import { createCandidateRetrieval } from '../clustering/candidateRetrieval.js';
+import { evaluateStoryCandidates, selectClusteringAction } from '../clustering/scoringPolicy.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import {
@@ -10,88 +12,87 @@ import {
 import { attachArticleToStory, createStoryFromArticle } from '../repositories/storyRepository.js';
 import { buildArticleEmbedding, cosineSimilarity, generateEmbedding } from './embeddingService.js';
 
-const MAX_SUPPORTING_ARTICLES_CAP = 5;
-const RECENCY_WINDOW_HOURS = 24;
+export { evaluateStoryCandidates, selectClusteringAction };
 
-const toDate = (value) => (value ? new Date(value) : new Date());
+const ensureArticleEmbedding = async ({ article, deps, envConfig }) => {
+  let embedding = article.embedding;
 
-const scoreStoryCandidate = ({ bestSimilarity, supportCount, recencyHours }) => {
-  const supportingArticlesBoost = Math.min(supportCount / MAX_SUPPORTING_ARTICLES_CAP, 1);
-  const recencyBoost = Math.max(0, 1 - recencyHours / RECENCY_WINDOW_HOURS);
-
-  return {
-    score: bestSimilarity * 0.75 + supportingArticlesBoost * 0.15 + recencyBoost * 0.1,
-    supportingArticlesBoost,
-    recencyBoost
-  };
-};
-
-export const evaluateStoryCandidates = (article, nearestCandidates) => {
-  const grouped = new Map();
-
-  for (const candidate of nearestCandidates) {
-    if (!candidate.storyId) {
-      continue;
-    }
-
-    const key = String(candidate.storyId);
-    const current = grouped.get(key) ?? {
-      storyId: key,
-      similarities: [],
-      latestCandidatePublishedAt: null
-    };
-    current.similarities.push(candidate.similarity);
-
-    if (!current.latestCandidatePublishedAt || new Date(candidate.publishedAt) > new Date(current.latestCandidatePublishedAt)) {
-      current.latestCandidatePublishedAt = candidate.publishedAt;
-    }
-
-    grouped.set(key, current);
+  if (Array.isArray(embedding) && embedding.length) {
+    return embedding;
   }
 
-  let best = null;
+  const embeddingText = deps.buildArticleEmbedding(article);
+  logger.info('Generating embedding for normalized article', {
+    normalizedItemId: String(article._id),
+    embeddingModel: envConfig.ZENADAM_EMBEDDING_MODEL
+  });
 
-  for (const candidate of grouped.values()) {
-    const bestSimilarity = Math.max(...candidate.similarities);
-    const supportCount = candidate.similarities.length;
-    const recencyHours =
-      Math.abs(toDate(article.publishedAt).getTime() - toDate(candidate.latestCandidatePublishedAt).getTime()) /
-      (1000 * 60 * 60);
+  embedding = await deps.generateEmbedding(embeddingText);
+  await deps.updateNormalizedItemEmbedding(article._id, {
+    embedding,
+    embeddingModel: envConfig.ZENADAM_EMBEDDING_MODEL,
+    embeddingCreatedAt: new Date()
+  });
 
-    const scoreBreakdown = scoreStoryCandidate({ bestSimilarity, supportCount, recencyHours });
+  return embedding;
+};
 
-    const scored = {
-      storyId: candidate.storyId,
-      bestSimilarity,
-      supportCount,
-      recencyHours,
-      ...scoreBreakdown
-    };
+const attachToExistingStory = async ({ article, bestStory, lookupMethod, deps }) => {
+  const updatedStory = await deps.attachArticleToStory({
+    storyId: bestStory.storyId,
+    article
+  });
 
-    if (!best || scored.score > best.score) {
-      best = scored;
+  await deps.markNormalizedItemClusteringResult(article._id, {
+    storyId: bestStory.storyId,
+    clusteredAt: new Date(),
+    clusteringStatus: 'clustered',
+    clusteringScore: bestStory.score,
+    clusteringMetadata: {
+      lookupMethod,
+      bestSimilarity: bestStory.bestSimilarity,
+      supportCount: bestStory.supportCount,
+      recencyHours: bestStory.recencyHours
     }
-  }
+  });
 
-  return best;
+  logger.info('Attached article to existing story', {
+    normalizedItemId: String(article._id),
+    storyId: bestStory.storyId,
+    score: bestStory.score,
+    lookupMethod
+  });
+
+  return { action: 'attached', storyId: bestStory.storyId, score: bestStory.score, story: updatedStory };
 };
 
-export const selectClusteringAction = ({ bestStoryScore, strongThreshold }) => {
-  if (bestStoryScore >= strongThreshold) {
-    return 'attach';
-  }
+const createNewStory = async ({ article, bestStory, lookupMethod, deps }) => {
+  const story = await deps.createStoryFromArticle(article);
 
-  return 'create';
-};
+  await deps.markNormalizedItemClusteringResult(article._id, {
+    storyId: story._id,
+    clusteredAt: new Date(),
+    clusteringStatus: 'clustered',
+    clusteringScore: bestStory?.score ?? 0,
+    clusteringMetadata: {
+      lookupMethod,
+      reason: 'no_strong_story_match',
+      bestCandidateScore: bestStory?.score ?? null
+    }
+  });
 
-const toFiniteSimilarity = (value) => {
-  const similarity = Number(value);
-  return Number.isFinite(similarity) ? similarity : 0;
+  logger.info('Created new story from article', {
+    normalizedItemId: String(article._id),
+    storyId: String(story._id),
+    lookupMethod
+  });
+
+  return { action: 'created', storyId: String(story._id), score: bestStory?.score ?? 0, story };
 };
 
 export const createIncrementalClusteringRunner = (overrides = {}) => {
   const resolvedEnv = overrides.env ?? env;
-  const resolvedDeps = {
+  const deps = {
     findNearestCandidateArticlesByVector: overrides.findNearestCandidateArticlesByVector ?? findNearestCandidateArticlesByVector,
     findRecentCandidateArticles: overrides.findRecentCandidateArticles ?? findRecentCandidateArticles,
     markNormalizedItemClusteringFailed: overrides.markNormalizedItemClusteringFailed ?? markNormalizedItemClusteringFailed,
@@ -104,35 +105,11 @@ export const createIncrementalClusteringRunner = (overrides = {}) => {
     generateEmbedding: overrides.generateEmbedding ?? generateEmbedding
   };
 
-  const getFallbackNearestCandidates = async (article, embedding) => {
-    const candidates = await resolvedDeps.findRecentCandidateArticles(article, {
-      candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS,
-      maxCandidateArticles: resolvedEnv.MAX_CANDIDATE_ARTICLES
-    });
-
-    const nearestCandidates = candidates
-      .map((candidate) => ({
-        ...candidate,
-        similarity: resolvedDeps.cosineSimilarity(embedding, candidate.embedding)
-      }))
-      .filter((candidate) => candidate.similarity >= resolvedEnv.SIMILARITY_BORDERLINE_THRESHOLD)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, resolvedEnv.MAX_NEAREST_ARTICLES);
-
-    return { candidates, nearestCandidates };
-  };
-
-  const getVectorNearestCandidates = async (article, embedding) => {
-    return resolvedDeps.findNearestCandidateArticlesByVector({
-      articleId: article._id,
-      embedding,
-      publishedAt: article.publishedAt,
-      candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS,
-      limit: resolvedEnv.MAX_NEAREST_ARTICLES,
-      numCandidates: resolvedEnv.VECTOR_NUM_CANDIDATES,
-      indexName: resolvedEnv.VECTOR_SEARCH_INDEX_NAME
-    });
-  };
+  const candidateRetrieval = createCandidateRetrieval({
+    deps,
+    env: resolvedEnv,
+    logger
+  });
 
   return async (article) => {
     if (article.clusteringStatus === 'clustered') {
@@ -140,127 +117,32 @@ export const createIncrementalClusteringRunner = (overrides = {}) => {
     }
 
     try {
-      let embedding = article.embedding;
+      const embedding = await ensureArticleEmbedding({
+        article,
+        deps,
+        envConfig: resolvedEnv
+      });
 
-      if (!Array.isArray(embedding) || !embedding.length) {
-        const embeddingText = resolvedDeps.buildArticleEmbedding(article);
-        logger.info('Generating embedding for normalized article', {
-          normalizedItemId: String(article._id),
-          embeddingModel: resolvedEnv.ZENADAM_EMBEDDING_MODEL
-        });
-        embedding = await resolvedDeps.generateEmbedding(embeddingText);
-        await resolvedDeps.updateNormalizedItemEmbedding(article._id, {
-          embedding,
-          embeddingModel: resolvedEnv.ZENADAM_EMBEDDING_MODEL,
-          embeddingCreatedAt: new Date()
-        });
-      }
-
-      let nearestCandidates = [];
-      let lookupMethod = 'vector_search';
-
-      if (resolvedEnv.VECTOR_SEARCH_ENABLED) {
-        try {
-          logger.info('Executing vector search for incremental clustering', {
-            normalizedItemId: String(article._id),
-            vectorIndexName: resolvedEnv.VECTOR_SEARCH_INDEX_NAME,
-            vectorNumCandidates: resolvedEnv.VECTOR_NUM_CANDIDATES,
-            nearestLimit: resolvedEnv.MAX_NEAREST_ARTICLES,
-            candidateWindowHours: resolvedEnv.CANDIDATE_WINDOW_HOURS
-          });
-
-          const vectorCandidates = await getVectorNearestCandidates(article, embedding);
-          nearestCandidates = vectorCandidates
-            .map((candidate) => ({ ...candidate, similarity: toFiniteSimilarity(candidate.similarity) }))
-            .filter((candidate) => candidate.similarity >= resolvedEnv.SIMILARITY_BORDERLINE_THRESHOLD)
-            .sort((a, b) => b.similarity - a.similarity)
-            .slice(0, resolvedEnv.MAX_NEAREST_ARTICLES);
-
-          logger.info('Vector search candidate retrieval completed', {
-            normalizedItemId: String(article._id),
-            candidateCount: vectorCandidates.length,
-            nearestCount: nearestCandidates.length,
-            topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
-          });
-        } catch (error) {
-          lookupMethod = 'recent_scan_fallback';
-          logger.warn('Vector search unavailable, falling back to recent-scan cosine flow', {
-            normalizedItemId: String(article._id),
-            message: error.message
-          });
-        }
-      } else {
-        lookupMethod = 'recent_scan_fallback';
-        logger.info('Vector search disabled via env; using fallback cosine scan', {
-          normalizedItemId: String(article._id)
-        });
-      }
-
-      if (lookupMethod === 'recent_scan_fallback') {
-        const { candidates, nearestCandidates: fallbackNearest } = await getFallbackNearestCandidates(article, embedding);
-        nearestCandidates = fallbackNearest;
-
-        logger.info('Fallback candidate retrieval completed', {
-          normalizedItemId: String(article._id),
-          candidateCount: candidates.length,
-          nearestCount: nearestCandidates.length,
-          topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
-        });
-      }
-
+      const { lookupMethod, nearestCandidates } = await candidateRetrieval.retrieveNearestCandidates(article, embedding);
       const bestStory = evaluateStoryCandidates(article, nearestCandidates);
 
       if (bestStory && selectClusteringAction({ bestStoryScore: bestStory.score, strongThreshold: resolvedEnv.SIMILARITY_STRONG_THRESHOLD }) === 'attach') {
-        const updatedStory = await resolvedDeps.attachArticleToStory({
-          storyId: bestStory.storyId,
-          article
+        return attachToExistingStory({
+          article,
+          bestStory,
+          lookupMethod,
+          deps
         });
-
-        await resolvedDeps.markNormalizedItemClusteringResult(article._id, {
-          storyId: bestStory.storyId,
-          clusteredAt: new Date(),
-          clusteringStatus: 'clustered',
-          clusteringScore: bestStory.score,
-          clusteringMetadata: {
-            lookupMethod,
-            bestSimilarity: bestStory.bestSimilarity,
-            supportCount: bestStory.supportCount,
-            recencyHours: bestStory.recencyHours
-          }
-        });
-
-        logger.info('Attached article to existing story', {
-          normalizedItemId: String(article._id),
-          storyId: bestStory.storyId,
-          score: bestStory.score,
-          lookupMethod
-        });
-
-        return { action: 'attached', storyId: bestStory.storyId, score: bestStory.score, story: updatedStory };
       }
 
-      const story = await resolvedDeps.createStoryFromArticle(article);
-      await resolvedDeps.markNormalizedItemClusteringResult(article._id, {
-        storyId: story._id,
-        clusteredAt: new Date(),
-        clusteringStatus: 'clustered',
-        clusteringScore: bestStory?.score ?? 0,
-        clusteringMetadata: {
-          lookupMethod,
-          reason: 'no_strong_story_match',
-          bestCandidateScore: bestStory?.score ?? null
-        }
+      return createNewStory({
+        article,
+        bestStory,
+        lookupMethod,
+        deps
       });
-
-      logger.info('Created new story from article', {
-        normalizedItemId: String(article._id),
-        storyId: String(story._id),
-        lookupMethod
-      });
-
-      return { action: 'created', storyId: String(story._id), score: bestStory?.score ?? 0, story };
     } catch (error) {
-      await resolvedDeps.markNormalizedItemClusteringFailed(article._id, error.message);
+      await deps.markNormalizedItemClusteringFailed(article._id, error.message);
       logger.error('Incremental clustering failed', {
         normalizedItemId: String(article._id),
         message: error.message

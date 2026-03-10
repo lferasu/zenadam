@@ -44,14 +44,19 @@ export const upsertNormalizedItem = async (item) => {
     setPayload.clusteringStatus = item.clusteringStatus;
   }
 
+  const setOnInsertPayload = {
+    createdAt: now
+  };
+
+  if (!item.clusteringStatus) {
+    setOnInsertPayload.clusteringStatus = 'pending';
+  }
+
   const result = await collection.findOneAndUpdate(
     { sourceItemId },
     {
       $set: setPayload,
-      $setOnInsert: {
-        createdAt: now,
-        clusteringStatus: item.clusteringStatus ?? 'pending'
-      }
+      $setOnInsert: setOnInsertPayload
     },
     {
       upsert: true,
@@ -69,19 +74,23 @@ export const findUnclusteredNormalizedItems = async (limit = 250) => {
     .find({
       $or: [{ clusteringStatus: 'pending' }, { clusteringStatus: { $exists: false } }]
     })
-    .sort({ publishedAt: -1, createdAt: -1 })
+    // Oldest-first improves single-pass incremental attach behavior because earlier
+    // items get storyIds before later related items are clustered.
+    .sort({ publishedAt: 1, createdAt: 1 })
     .limit(limit)
     .toArray();
 };
 
 export const buildCandidateArticleQuery = (article, options = {}) => {
   const candidateWindowHours = Number(options.candidateWindowHours ?? 72);
+  const candidateForwardWindowHours = Number(options.candidateForwardWindowHours ?? 0);
   const publishedAt = toDate(article.publishedAt);
   const windowStart = new Date(publishedAt.getTime() - candidateWindowHours * 60 * 60 * 1000);
+  const windowEnd = new Date(publishedAt.getTime() + candidateForwardWindowHours * 60 * 60 * 1000);
   const articleId = article._id ? toObjectId(article._id) : null;
 
   const query = {
-    publishedAt: { $gte: windowStart, $lte: publishedAt },
+    publishedAt: { $gte: windowStart, $lte: windowEnd },
     embedding: { $exists: true, $ne: [] }
   };
 
@@ -119,25 +128,22 @@ export const buildNearestVectorPipeline = ({
   embedding,
   publishedAt,
   candidateWindowHours,
+  candidateForwardWindowHours = 0,
   limit,
   numCandidates,
   indexName
 }) => {
-  const articleObjectId = articleId ? toObjectId(articleId) : null;
   const publishedAtDate = toDate(publishedAt);
   const windowStart = new Date(publishedAtDate.getTime() - Number(candidateWindowHours) * 60 * 60 * 1000);
+  const windowEnd = new Date(publishedAtDate.getTime() + Number(candidateForwardWindowHours) * 60 * 60 * 1000);
 
   const vectorFilter = {
     embedding: { $exists: true },
     publishedAt: {
       $gte: windowStart,
-      $lte: publishedAtDate
+      $lte: windowEnd
     }
   };
-
-  if (articleObjectId) {
-    vectorFilter._id = { $ne: articleObjectId };
-  }
 
   return [
     {
@@ -169,6 +175,7 @@ export const findNearestCandidateArticlesByVector = async ({
   embedding,
   publishedAt,
   candidateWindowHours = env.CANDIDATE_WINDOW_HOURS,
+  candidateForwardWindowHours = env.CANDIDATE_FORWARD_WINDOW_HOURS,
   limit = env.MAX_NEAREST_ARTICLES,
   numCandidates = env.VECTOR_NUM_CANDIDATES,
   indexName = env.VECTOR_SEARCH_INDEX_NAME
@@ -183,6 +190,7 @@ export const findNearestCandidateArticlesByVector = async ({
     embedding,
     publishedAt,
     candidateWindowHours,
+    candidateForwardWindowHours,
     limit,
     numCandidates,
     indexName
@@ -191,7 +199,7 @@ export const findNearestCandidateArticlesByVector = async ({
   const candidates = await collection.aggregate(pipeline).toArray();
 
   const windowStart = new Date(toDate(publishedAt).getTime() - Number(candidateWindowHours) * 60 * 60 * 1000);
-  const publishedAtDate = toDate(publishedAt);
+  const windowEnd = new Date(toDate(publishedAt).getTime() + Number(candidateForwardWindowHours) * 60 * 60 * 1000);
 
   return candidates.filter((candidate) => {
     const candidatePublishedAt = candidate.publishedAt ? new Date(candidate.publishedAt) : null;
@@ -199,7 +207,7 @@ export const findNearestCandidateArticlesByVector = async ({
       return false;
     }
 
-    if (candidatePublishedAt < windowStart || candidatePublishedAt > publishedAtDate) {
+    if (candidatePublishedAt < windowStart || candidatePublishedAt > windowEnd) {
       return false;
     }
 
@@ -280,4 +288,36 @@ export const markNormalizedItemClusteringFailed = async (id, reason) => {
       }
     }
   );
+};
+
+export const findRepresentativeNormalizedItemForStory = async (storyId) => {
+  const collection = await getCollection();
+
+  return collection.findOne(
+    {
+      storyId: toObjectId(storyId),
+      embedding: { $exists: true, $ne: [] }
+    },
+    {
+      sort: { publishedAt: -1, updatedAt: -1 }
+    }
+  );
+};
+
+export const reassignStoryForNormalizedItems = async ({ fromStoryId, toStoryId }) => {
+  const collection = await getCollection();
+  const result = await collection.updateMany(
+    { storyId: toObjectId(fromStoryId) },
+    {
+      $set: {
+        storyId: toObjectId(toStoryId),
+        updatedAt: new Date()
+      }
+    }
+  );
+
+  return {
+    matchedCount: Number(result.matchedCount ?? 0),
+    modifiedCount: Number(result.modifiedCount ?? 0)
+  };
 };

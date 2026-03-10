@@ -58,6 +58,7 @@ zenadam/
 - Normalization + story clustering pipeline to produce feed-ready stories.
 - Source audit tooling (RSS + scraper health checks, JSON report output).
 - Source prune tooling (dry-run/apply removal of failed sources).
+- Story reconciliation tooling (dry-run/apply merge for fragmented one-item stories).
 - Worker entrypoints:
   - `npm run worker`
   - `npm run worker:ingestion`
@@ -68,6 +69,7 @@ zenadam/
   - `npm run worker:pipeline`
   - `npm run audit:sources`
   - `npm run prune:sources`
+  - `npm run reconcile:stories`
   - `npm run cron`
 - Render deployment template for API + worker + cron.
 - Environment variable contract in `.env.example`.
@@ -107,11 +109,15 @@ zenadam/
    ```bash
    npm run prune:sources
    ```
-9. Check health:
+9. Dry-run story reconciliation:
+   ```bash
+   npm run reconcile:stories
+   ```
+10. Check health:
    ```bash
    curl http://localhost:3000/api/v1/health
    ```
-10. Fetch feed stories:
+11. Fetch feed stories:
    ```bash
    curl 'http://localhost:3000/api/v1/feed?limit=10'
    ```
@@ -122,6 +128,7 @@ zenadam/
 - `backend/docs/source-audit.md`
 - `backend/docs/source-prune.md`
 - `backend/docs/incremental-clustering.md`
+- `backend/docs/story-reconciliation.md`
 - `backend/examples/source-configs.json`
 
 ## Next implementation phases

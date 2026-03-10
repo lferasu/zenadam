@@ -12,33 +12,36 @@ export const upsertSourceItem = async (item) => {
   const now = new Date();
   const sourceId = new ObjectId(item.sourceId);
   const externalId = item.externalId || item.url;
-
-  const result = await collection.findOneAndUpdate(
-    { sourceId, externalId },
-    {
-      $set: {
-        sourceId,
-        externalId,
-        url: item.url,
-        title: item.title,
-        rawPayload: item.rawPayload ?? null,
-        rawText: item.rawText ?? null,
-        publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
-        fetchedAt: item.fetchedAt ? new Date(item.fetchedAt) : now,
-        ingestStatus: SOURCE_ITEM_INGEST_STATUS.FETCHED,
-        updatedAt: now
-      },
-      $setOnInsert: {
-        createdAt: now
-      }
+  const updatePayload = {
+    $set: {
+      sourceId,
+      externalId,
+      url: item.url,
+      title: item.title,
+      rawPayload: item.rawPayload ?? null,
+      rawText: item.rawText ?? null,
+      publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+      fetchedAt: item.fetchedAt ? new Date(item.fetchedAt) : now,
+      ingestStatus: SOURCE_ITEM_INGEST_STATUS.FETCHED,
+      updatedAt: now
     },
-    {
-      upsert: true,
-      returnDocument: 'after'
+    $setOnInsert: {
+      createdAt: now
     }
-  );
+  };
 
-  return result;
+  try {
+    const result = await collection.updateOne({ sourceId, externalId }, updatePayload, { upsert: true });
+    return { inserted: result.upsertedCount > 0 };
+  } catch (error) {
+    // If externalId changed but URL is the same, treat as the same source item.
+    if (error?.code === 11000 && item.url) {
+      const fallbackResult = await collection.updateOne({ sourceId, url: item.url }, updatePayload, { upsert: true });
+      return { inserted: fallbackResult.upsertedCount > 0 };
+    }
+
+    throw error;
+  }
 };
 
 export const findItemsByIngestStatus = async (status, limit = 100) => {
