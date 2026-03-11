@@ -45,21 +45,22 @@ export const translateStructuredSummary = async ({ structuredSummary, sourceLang
     return structuredSummary;
   }
 
-  const bullets = await Promise.all(
-    (structuredSummary?.bullets ?? []).map((bullet) =>
-      translateText({
-        text: bullet,
-        sourceLanguage,
-        targetLanguage
-      })
-    )
-  );
-
-  const paragraph = await translateText({
-    text: structuredSummary?.paragraph ?? '',
-    sourceLanguage,
-    targetLanguage
-  });
+  const [bullets, paragraph] = await Promise.all([
+    Promise.all(
+      (structuredSummary?.bullets ?? []).map((bullet) =>
+        translateText({
+          text: bullet,
+          sourceLanguage,
+          targetLanguage
+        })
+      )
+    ),
+    translateText({
+      text: structuredSummary?.paragraph ?? '',
+      sourceLanguage,
+      targetLanguage
+    })
+  ]);
 
   return { bullets, paragraph };
 };

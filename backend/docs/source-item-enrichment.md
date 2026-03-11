@@ -33,3 +33,8 @@ Enrichment is batch-safe:
 - One failed item does not fail the whole batch.
 - Failures are marked on the source item with status `failed` and metadata.
 - Failed items are not persisted as successful normalized items and do not become clustering-ready.
+
+## Throughput tuning
+
+- `ZENADAM_NORMALIZATION_CONCURRENCY` controls how many source items are enriched in parallel within one normalization batch.
+- This improves throughput without changing enrichment semantics, status handling, or downstream clustering eligibility rules.

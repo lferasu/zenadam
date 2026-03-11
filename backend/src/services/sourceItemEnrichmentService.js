@@ -30,25 +30,29 @@ export const buildSourceItemEnrichment = async (item, { targetLanguage, deps = {
   const draftTitle = titleOriginal || contentOriginal.slice(0, 160) || 'Untitled source item';
   const draftSummary = summarize({ title: draftTitle, body: contentOriginal, targetLanguage: sourceLanguage });
 
-  const normalizedTitle = await translate({ text: draftTitle, sourceLanguage, targetLanguage });
-  const normalizedDetailedSummary = await translate({ text: draftSummary.text, sourceLanguage, targetLanguage });
-  const structuredSummary = await translateStructured({
-    structuredSummary: draftSummary,
-    sourceLanguage,
-    targetLanguage
-  });
+  const [normalizedTitle, normalizedDetailedSummary, structuredSummary] = await Promise.all([
+    translate({ text: draftTitle, sourceLanguage, targetLanguage }),
+    translate({ text: draftSummary.text, sourceLanguage, targetLanguage }),
+    translateStructured({
+      structuredSummary: draftSummary,
+      sourceLanguage,
+      targetLanguage
+    })
+  ]);
   const snippet = toSnippet(normalizedDetailedSummary, normalizedTitle);
 
-  const typedEntities = mergeEntities(
-    await extractEntities({
+  const [targetLanguageEntities, sourceLanguageEntities] = await Promise.all([
+    extractEntities({
       text: [normalizedTitle, normalizedDetailedSummary].filter(Boolean).join('\n\n'),
       language: targetLanguage
     }),
-    await extractEntities({
+    extractEntities({
       text: [titleOriginal, contentOriginal].filter(Boolean).join('\n\n'),
       language: sourceLanguage
     })
-  );
+  ]);
+
+  const typedEntities = mergeEntities(targetLanguageEntities, sourceLanguageEntities);
 
   const topicFingerprint = buildFingerprint({
     title: normalizedTitle,

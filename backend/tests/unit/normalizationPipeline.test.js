@@ -19,6 +19,7 @@ test('normalization pipeline marks failed enrichment as not ready for clustering
   const result = await normalizePendingSourceItems({
     limit: 10,
     skipRuntimeInitialization: true,
+    concurrency: 1,
     deps: {
       findPendingNormalizationSourceItems: async () => sourceItems,
       markSourceItemNormalizationProcessing: async (id) => calls.processing.push(id),
