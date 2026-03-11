@@ -9,7 +9,12 @@ import {
 } from '../repositories/storyRepository.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
 import { clusterNormalizedItems } from '../clustering/storyClusterer.js';
+import { env } from '../config/env.js';
 import { clusterArticleIncrementally } from './incrementalClusteringService.js';
+
+const wait = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
 
 export const generateStoriesFromNormalizedItems = async ({ limit = 250 } = {}) => {
   await ensureRuntimeInitialized();
@@ -17,6 +22,10 @@ export const generateStoriesFromNormalizedItems = async ({ limit = 250 } = {}) =
   const items = await findUnclusteredNormalizedItems(limit);
   if (!items.length) {
     return { scanned: 0, generated: 0, attached: 0, failed: 0 };
+  }
+
+  if (env.VECTOR_SEARCH_ENABLED && env.VECTOR_INDEX_SETTLE_MS > 0) {
+    await wait(env.VECTOR_INDEX_SETTLE_MS);
   }
 
   let generated = 0;

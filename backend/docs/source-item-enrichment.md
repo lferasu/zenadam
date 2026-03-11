@@ -25,6 +25,7 @@ Pipeline order:
 - `ZENADAM_TARGET_LANGUAGE` (default `am`)
 - `OPENAI_API_KEY` (required when translation is needed)
 - `AI_TRANSLATION_MODEL` (optional override, defaults to `gpt-4o-mini`)
+- `ZENADAM_EMBEDDING_MODEL` (optional override, defaults to `text-embedding-3-large`)
 
 ## Failure handling
 
@@ -38,3 +39,9 @@ Enrichment is batch-safe:
 
 - `ZENADAM_NORMALIZATION_CONCURRENCY` controls how many source items are enriched in parallel within one normalization batch.
 - This improves throughput without changing enrichment semantics, status handling, or downstream clustering eligibility rules.
+
+## Vector search readiness
+
+- Enrichment now generates embeddings during normalization so clustering does not have to create them inline.
+- `VECTOR_INDEX_SETTLE_MS` adds a short pause before clustering to give Atlas vector search time to index freshly written embeddings.
+- This reduces false zero-candidate vector lookups during fresh pipeline runs.
