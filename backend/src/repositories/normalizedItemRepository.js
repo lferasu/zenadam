@@ -23,11 +23,18 @@ export const upsertNormalizedItem = async (item) => {
     sourceItemId,
     sourceId,
     canonicalUrl: item.canonicalUrl ?? null,
+    sourceLanguage: item.sourceLanguage ?? item.language,
+    targetLanguage: item.targetLanguage ?? item.language,
+    titleOriginal: item.titleOriginal ?? null,
+    contentOriginal: item.contentOriginal ?? null,
+    normalizedTitle: item.normalizedTitle ?? item.title,
     title: item.title,
     snippet: item.snippet ?? null,
     content: item.content,
     normalizedDetailedSummary: item.normalizedDetailedSummary ?? null,
-    normalizedDetailedSummaryStructured: item.normalizedDetailedSummaryStructured ?? null,
+    structuredSummary: item.structuredSummary ?? item.normalizedDetailedSummaryStructured ?? null,
+    normalizedDetailedSummaryStructured: item.normalizedDetailedSummaryStructured ?? item.structuredSummary ?? null,
+    embeddingInput: item.embeddingInput ?? null,
     language: item.language,
     entities: item.entities ?? [],
     persons: item.persons ?? [],
@@ -36,6 +43,8 @@ export const upsertNormalizedItem = async (item) => {
     topicFingerprint: item.topicFingerprint ?? null,
     publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
     dedupeHash: item.dedupeHash,
+    enrichmentStatus: item.enrichmentStatus ?? 'succeeded',
+    enrichmentMetadata: item.enrichmentMetadata ?? null,
     updatedAt: now
   };
 
@@ -77,7 +86,10 @@ export const findUnclusteredNormalizedItems = async (limit = 250) => {
 
   return collection
     .find({
-      $or: [{ clusteringStatus: 'pending' }, { clusteringStatus: { $exists: false } }]
+      $and: [
+        { $or: [{ clusteringStatus: 'pending' }, { clusteringStatus: { $exists: false } }] },
+        { $or: [{ enrichmentStatus: 'succeeded' }, { enrichmentStatus: { $exists: false } }] }
+      ]
     })
     // Oldest-first improves single-pass incremental attach behavior because earlier
     // items get storyIds before later related items are clustered.

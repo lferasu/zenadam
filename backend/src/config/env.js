@@ -31,6 +31,7 @@ export const env = {
   ZENADAM_ENABLE_STORY_SUMMARY_REFRESH:
     (process.env.ZENADAM_ENABLE_STORY_SUMMARY_REFRESH ?? 'true').toLowerCase() === 'true',
   ZENADAM_NORMALIZATION_BATCH_LIMIT: Number(process.env.ZENADAM_NORMALIZATION_BATCH_LIMIT ?? 100),
+  ZENADAM_NORMALIZATION_CONCURRENCY: Number(process.env.ZENADAM_NORMALIZATION_CONCURRENCY ?? 4),
   VECTOR_SEARCH_ENABLED: (process.env.VECTOR_SEARCH_ENABLED ?? 'true').toLowerCase() === 'true',
   VECTOR_SEARCH_INDEX_NAME: process.env.VECTOR_SEARCH_INDEX_NAME ?? 'normalized_item_embedding_index',
   VECTOR_NUM_CANDIDATES: Number(process.env.VECTOR_NUM_CANDIDATES ?? 100),

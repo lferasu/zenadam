@@ -1,5 +1,4 @@
 import { env } from '../config/env.js';
-import { generateSourceItemNormalization } from '../ai/index.js';
 import {
   findPendingNormalizationSourceItems,
   markSourceItemNormalizationFailed,
@@ -7,110 +6,74 @@ import {
   markSourceItemNormalizationReady
 } from '../repositories/sourceItemRepository.js';
 import { upsertNormalizedItem } from '../repositories/normalizedItemRepository.js';
-import { extractTypedEntities, mergeTypedEntities } from './entityExtractionService.js';
-import { buildDedupeHash } from '../utils/hash.js';
-import { normalizeText, pickKeywords } from '../utils/text.js';
-import { buildTopicFingerprint } from '../utils/topicFingerprint.js';
+import { buildSourceItemEnrichment } from './sourceItemEnrichmentService.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
+import { runWithConcurrency } from '../utils/async.js';
 
-const buildNormalizedRecord = (item, normalization, typedEntities) => {
-  const normalizedTitle = normalizeText(item.title || '');
-  const normalizedContent = normalizeText(item.rawText || item.title || '');
-  const snippet = normalizedContent.slice(0, 280) || normalizedTitle;
-  const publishedAt = item.publishedAt ?? item.fetchedAt ?? null;
-  const topicFingerprint = buildTopicFingerprint({
-    title: normalization.normalizedTitle,
-    detailedSummary: normalization.normalizedDetailedSummary,
-    structuredSummary: normalization.normalizedDetailedSummaryStructured,
-    content: normalizedContent,
-    snippet,
-    typedEntities
-  });
-
-  return {
-    sourceItemId: item._id,
-    sourceId: item.sourceId,
-    canonicalUrl: item.url ?? null,
-    title: normalizedTitle,
-    snippet,
-    content: normalizedContent,
-    normalizedDetailedSummary: normalization.normalizedDetailedSummary,
-    normalizedDetailedSummaryStructured: normalization.normalizedDetailedSummaryStructured,
-    language: normalization.sourceLanguage,
-    entities: topicFingerprint.entities,
-    persons: topicFingerprint.persons,
-    locations: topicFingerprint.locations,
-    keywords: uniqueKeywords(topicFingerprint.keywords, normalizedTitle, normalizedContent),
-    topicFingerprint,
-    publishedAt,
-    clusteringStatus: 'pending',
-    dedupeHash: buildDedupeHash({
-      title: normalizedTitle,
-      content: normalizedContent,
-      publishedAt
-    })
-  };
-};
-
-const uniqueKeywords = (fingerprintKeywords, title, content) => {
-  return [...new Set([...(fingerprintKeywords ?? []), ...pickKeywords(title, content)])].slice(0, 8);
-};
-
-export const normalizePendingSourceItems = async ({ limit = env.ZENADAM_NORMALIZATION_BATCH_LIMIT } = {}) => {
-  await ensureRuntimeInitialized();
+export const normalizePendingSourceItems = async ({
+  limit = env.ZENADAM_NORMALIZATION_BATCH_LIMIT,
+  deps = {},
+  skipRuntimeInitialization = false,
+  concurrency = env.ZENADAM_NORMALIZATION_CONCURRENCY
+} = {}) => {
+  if (!skipRuntimeInitialization) {
+    await ensureRuntimeInitialized();
+  }
 
   if (!env.ZENADAM_ENABLE_NORMALIZATION) {
     return {
       scanned: 0,
       normalizedCount: 0,
+      failedCount: 0,
       skipped: true,
       reason: 'normalization_disabled'
     };
   }
 
-  const sourceItems = await findPendingNormalizationSourceItems(limit);
+  const repository = {
+    findPendingNormalizationSourceItems: deps.findPendingNormalizationSourceItems ?? findPendingNormalizationSourceItems,
+    markSourceItemNormalizationProcessing: deps.markSourceItemNormalizationProcessing ?? markSourceItemNormalizationProcessing,
+    markSourceItemNormalizationReady: deps.markSourceItemNormalizationReady ?? markSourceItemNormalizationReady,
+    markSourceItemNormalizationFailed: deps.markSourceItemNormalizationFailed ?? markSourceItemNormalizationFailed,
+    upsertNormalizedItem: deps.upsertNormalizedItem ?? upsertNormalizedItem
+  };
+
+  const enrichSourceItem = deps.enrichSourceItem ?? buildSourceItemEnrichment;
+
+  const sourceItems = await repository.findPendingNormalizationSourceItems(limit);
   let normalizedCount = 0;
   let failedCount = 0;
 
-  for (const sourceItem of sourceItems) {
-    try {
-      await markSourceItemNormalizationProcessing(sourceItem._id);
-      const targetLanguage = env.ZENADAM_TARGET_LANGUAGE;
-      const normalization = await generateSourceItemNormalization({
-        title: sourceItem.title || '',
-        body: sourceItem.rawText || '',
-        url: sourceItem.url || '',
-        targetLanguage
-      });
+  await runWithConcurrency({
+    items: sourceItems,
+    concurrency,
+    worker: async (sourceItem) => {
+      try {
+        await repository.markSourceItemNormalizationProcessing(sourceItem._id);
+        const enriched = await enrichSourceItem(sourceItem, { targetLanguage: env.ZENADAM_TARGET_LANGUAGE });
 
-      const typedEntities = mergeTypedEntities(
-        await extractTypedEntities({
-          text: [normalization.normalizedTitle, normalization.normalizedDetailedSummary].filter(Boolean).join('\n\n'),
-          language: normalization.sourceLanguage
-        }),
-        await extractTypedEntities({
-          text: [sourceItem.title || '', sourceItem.rawText || ''].filter(Boolean).join('\n\n'),
-          language: normalization.sourceLanguage
-        })
-      );
+        await repository.upsertNormalizedItem(enriched.normalizedItem);
 
-      const normalized = buildNormalizedRecord(sourceItem, normalization, typedEntities);
-      await upsertNormalizedItem(normalized);
+        await repository.markSourceItemNormalizationReady(sourceItem._id, {
+          sourceLanguage: enriched.sourceLanguage,
+          targetLanguage: enriched.targetLanguage,
+          normalizedTitle: enriched.normalizedItem.normalizedTitle,
+          normalizedDetailedSummary: enriched.normalizedItem.normalizedDetailedSummary,
+          normalizedDetailedSummaryStructured: enriched.normalizedItem.structuredSummary,
+          snippet: enriched.normalizedItem.snippet,
+          enrichmentMetadata: enriched.normalizedItem.enrichmentMetadata
+        });
 
-      await markSourceItemNormalizationReady(sourceItem._id, {
-        sourceLanguage: normalization.sourceLanguage,
-        targetLanguage,
-        normalizedTitle: normalization.normalizedTitle,
-        normalizedDetailedSummary: normalization.normalizedDetailedSummary,
-        normalizedDetailedSummaryStructured: normalization.normalizedDetailedSummaryStructured
-      });
-
-      normalizedCount += 1;
-    } catch (error) {
-      failedCount += 1;
-      await markSourceItemNormalizationFailed(sourceItem._id, error.message);
+        normalizedCount += 1;
+      } catch (error) {
+        failedCount += 1;
+        await repository.markSourceItemNormalizationFailed(sourceItem._id, error.message, {
+          targetLanguage: env.ZENADAM_TARGET_LANGUAGE,
+          enrichmentStatus: 'failed'
+        });
+      }
     }
-  }
+  });
 
   return {
     scanned: sourceItems.length,
