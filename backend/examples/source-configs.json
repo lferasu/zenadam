@@ -1,5 +1,5 @@
-{
-  "rss": {
+[
+  {
     "slug": "bbc-amharic",
     "name": "BBC Amharic",
     "baseUrl": "https://www.bbc.com/amharic",
@@ -34,56 +34,403 @@
       ]
     }
   },
-  "scraper": {
-    "slug": "example-site-scraper",
-    "name": "Example Site Scraper",
-    "baseUrl": "https://example.com",
+  {
+    "slug": "voa-amharic",
+    "name": "VOA Amharic",
+    "baseUrl": "https://amharic.voanews.com",
     "entryUrls": [
-      "https://example.com/news"
+      "https://amharic.voanews.com/api/z$oroemoi"
     ],
-    "type": "scraper",
+    "type": "rss",
     "language": "am",
     "category": "news",
-    "status": "inactive",
-    "fetchConfig": {
-      "timeoutMs": 20000,
-      "userAgent": "ZenadamBot/0.1"
-    },
-    "parserConfig": {
-      "articleLinkSelector": "a.headline-link",
-      "titleSelector": "h1"
-    },
-    "normalizationConfig": {
-      "stripHtml": true,
-      "summaryMaxLength": 800
-    }
-  },
-  "api": {
-    "slug": "example-api-source",
-    "name": "Example API Source",
-    "baseUrl": "https://api.example.com",
-    "entryUrls": [
-      "https://api.example.com/v1/news"
-    ],
-    "type": "api",
-    "language": "am",
-    "category": "news",
-    "status": "inactive",
+    "status": "active",
     "fetchConfig": {
       "timeoutMs": 15000,
-      "userAgent": "ZenadamBot/0.1",
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
       "headers": {
-        "authorization": "Bearer <token>"
+        "accept-language": "am,en;q=0.8"
       }
     },
     "parserConfig": {
-      "itemsPath": "data.items",
-      "titleField": "headline",
-      "urlField": "link"
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
     },
     "normalizationConfig": {
       "stripHtml": true,
-      "summaryMaxLength": 800
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "dw-amharic",
+    "name": "DW Amharic",
+    "baseUrl": "https://www.dw.com/am",
+    "entryUrls": [
+      "https://rss.dw.com/atom/rss-am-all"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "am,en;q=0.8"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "updated"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "ethiopian-reporter-am",
+    "name": "The Reporter Ethiopia Amharic",
+    "baseUrl": "https://www.ethiopianreporter.com",
+    "entryUrls": [
+      "https://www.ethiopianreporter.com/amharic/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "fana-amharic",
+    "name": "Fana Broadcasting Amharic",
+    "baseUrl": "https://www.fanabc.com",
+    "entryUrls": [
+      "https://www.fanabc.com/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "walta-amharic",
+    "name": "Walta Information Center",
+    "baseUrl": "https://waltainfo.com",
+    "entryUrls": [
+      "https://waltainfo.com/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "ena-amharic",
+    "name": "ENA Amharic",
+    "baseUrl": "https://www.ena.et",
+    "entryUrls": [
+      "https://www.ena.et/web/amh/rss"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "ahid-amharic",
+    "name": "AHADU Amharic",
+    "baseUrl": "https://www.ahaduweb.com",
+    "entryUrls": [
+      "https://www.ahaduweb.com/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "esat-amharic",
+    "name": "ESAT Amharic",
+    "baseUrl": "https://esatnews.org",
+    "entryUrls": [
+      "https://esatnews.org/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "addis-walta-amharic",
+    "name": "Addis Walta Amharic",
+    "baseUrl": "https://addiswalta.info",
+    "entryUrls": [
+      "https://addiswalta.info/feed/"
+    ],
+    "type": "rss",
+    "language": "am",
+    "category": "news",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)"
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "the-eastafrican",
+    "name": "The EastAfrican",
+    "baseUrl": "https://www.theeastafrican.co.ke",
+    "entryUrls": [
+      "https://www.theeastafrican.co.ke/tea/rss"
+    ],
+    "type": "rss",
+    "language": "en",
+    "category": "east-africa",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "en"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "capital-fm-kenya",
+    "name": "Capital FM Kenya",
+    "baseUrl": "https://www.capitalfm.co.ke",
+    "entryUrls": [
+      "https://www.capitalfm.co.ke/news/feed/"
+    ],
+    "type": "rss",
+    "language": "en",
+    "category": "east-africa",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "en"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "the-new-times-rwanda",
+    "name": "The New Times Rwanda",
+    "baseUrl": "https://www.newtimes.co.rw",
+    "entryUrls": [
+      "https://www.newtimes.co.rw/rss.xml"
+    ],
+    "type": "rss",
+    "language": "en",
+    "category": "east-africa",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "en"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "the-monitor-uganda",
+    "name": "Monitor Uganda",
+    "baseUrl": "https://www.monitor.co.ug",
+    "entryUrls": [
+      "https://www.monitor.co.ug/uganda/rss"
+    ],
+    "type": "rss",
+    "language": "en",
+    "category": "east-africa",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "en"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
+    }
+  },
+  {
+    "slug": "garowe-online",
+    "name": "Garowe Online",
+    "baseUrl": "https://www.garoweonline.com",
+    "entryUrls": [
+      "https://www.garoweonline.com/en/rss"
+    ],
+    "type": "rss",
+    "language": "en",
+    "category": "east-africa",
+    "status": "active",
+    "fetchConfig": {
+      "timeoutMs": 15000,
+      "retries": 2,
+      "retryDelayMs": 300,
+      "userAgent": "ZenadamBot/0.1 (+https://zenadam.local)",
+      "headers": {
+        "accept-language": "en"
+      }
+    },
+    "parserConfig": {
+      "preferredContentField": "content:encoded",
+      "preferredDateField": "pubDate"
+    },
+    "normalizationConfig": {
+      "stripHtml": true,
+      "summaryMaxLength": 800,
+      "titleCleanupRules": []
     }
   }
-}
+]

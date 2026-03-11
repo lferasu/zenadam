@@ -7,7 +7,9 @@ const run = async () => {
 
   logger.info('Source seed completed', {
     created: seedResult.created,
-    slug: seedResult.source?.slug
+    createdCount: seedResult.createdCount,
+    updatedCount: seedResult.updatedCount,
+    total: seedResult.total
   });
 };
 

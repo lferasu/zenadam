@@ -26,9 +26,14 @@ export const upsertNormalizedItem = async (item) => {
     title: item.title,
     snippet: item.snippet ?? null,
     content: item.content,
+    normalizedDetailedSummary: item.normalizedDetailedSummary ?? null,
+    normalizedDetailedSummaryStructured: item.normalizedDetailedSummaryStructured ?? null,
     language: item.language,
     entities: item.entities ?? [],
+    persons: item.persons ?? [],
+    locations: item.locations ?? [],
     keywords: item.keywords ?? [],
+    topicFingerprint: item.topicFingerprint ?? null,
     publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
     dedupeHash: item.dedupeHash,
     updatedAt: now
@@ -115,7 +120,12 @@ export const findRecentCandidateArticles = async (article, options = {}) => {
         sourceId: 1,
         publishedAt: 1,
         title: 1,
-        canonicalUrl: 1
+        canonicalUrl: 1,
+        keywords: 1,
+        entities: 1,
+        persons: 1,
+        locations: 1,
+        topicFingerprint: 1
       }
     })
     .sort({ publishedAt: -1 })
@@ -164,6 +174,11 @@ export const buildNearestVectorPipeline = ({
         publishedAt: 1,
         title: 1,
         canonicalUrl: 1,
+        keywords: 1,
+        entities: 1,
+        persons: 1,
+        locations: 1,
+        topicFingerprint: 1,
         similarity: { $meta: 'vectorSearchScore' }
       }
     }

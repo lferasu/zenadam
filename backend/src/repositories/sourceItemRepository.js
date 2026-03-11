@@ -105,6 +105,7 @@ export const markSourceItemNormalizationReady = async (id, payload) => {
         targetLanguage: payload.targetLanguage,
         normalizedTitle: payload.normalizedTitle,
         normalizedDetailedSummary: payload.normalizedDetailedSummary,
+        normalizedDetailedSummaryStructured: payload.normalizedDetailedSummaryStructured,
         normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.READY,
         normalizationError: null,
         normalizationUpdatedAt: now,
