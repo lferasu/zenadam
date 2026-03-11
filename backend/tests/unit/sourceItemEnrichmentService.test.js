@@ -20,7 +20,8 @@ test('enrichment succeeds when source language equals target language', async ()
         detectLanguage: () => 'am',
         translateText: async ({ text }) => text,
         translateStructuredSummary: async ({ structuredSummary }) => structuredSummary,
-        extractTypedEntities: async () => ({ persons: [], locations: [] })
+        extractTypedEntities: async () => ({ persons: [], locations: [] }),
+        generateEmbedding: async () => [0.1, 0.2]
       }
     }
   );
@@ -32,6 +33,7 @@ test('enrichment succeeds when source language equals target language', async ()
   assert.equal(typeof result.normalizedItem.normalizedTitle, 'string');
   assert.equal(typeof result.normalizedItem.normalizedDetailedSummary, 'string');
   assert.ok(result.normalizedItem.structuredSummary.bullets.length >= 1);
+  assert.deepEqual(result.normalizedItem.embedding, [0.1, 0.2]);
 });
 
 test('enrichment translates user-facing fields when source language differs from target language', async () => {
@@ -48,7 +50,8 @@ test('enrichment translates user-facing fields when source language differs from
         detectLanguage: () => 'en',
         translateText: async ({ text }) => `am:${text}`,
         translateStructuredSummary: async () => ({ bullets: ['am:b1'], paragraph: 'am:p' }),
-        extractTypedEntities: async () => ({ persons: [], locations: [] })
+        extractTypedEntities: async () => ({ persons: [], locations: [] }),
+        generateEmbedding: async () => [0.3, 0.4]
       }
     }
   );
@@ -59,6 +62,7 @@ test('enrichment translates user-facing fields when source language differs from
   assert.match(result.normalizedItem.normalizedDetailedSummary, /^am:/);
   assert.deepEqual(result.normalizedItem.structuredSummary, { bullets: ['am:b1'], paragraph: 'am:p' });
   assert.match(result.normalizedItem.snippet, /^am:/);
+  assert.deepEqual(result.normalizedItem.embedding, [0.3, 0.4]);
 });
 
 test('translation requirement fails explicitly when config is missing', async () => {

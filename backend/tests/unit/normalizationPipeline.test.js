@@ -48,7 +48,9 @@ test('normalization pipeline marks failed enrichment as not ready for clustering
             sourceLanguage: 'am',
             dedupeHash: 'hash',
             enrichmentStatus: 'succeeded',
-            enrichmentMetadata: { ok: true }
+            enrichmentMetadata: { ok: true },
+            embedding: [0.1, 0.2],
+            embeddingCreatedAt: new Date('2026-01-10T12:00:00.000Z')
           }
         };
       }
@@ -66,4 +68,5 @@ test('normalization pipeline marks failed enrichment as not ready for clustering
   assert.equal(calls.failed.length, 1);
   assert.equal(calls.failed[0].id, '2');
   assert.match(calls.failed[0].message, /translation config missing/);
+  assert.equal(calls.ready[0].payload.enrichmentMetadata.embeddingCreatedAt.toISOString(), '2026-01-10T12:00:00.000Z');
 });

@@ -1,7 +1,9 @@
 import { buildDedupeHash } from '../utils/hash.js';
 import { normalizeText, pickKeywords } from '../utils/text.js';
+import { env } from '../config/env.js';
 import { buildTopicFingerprint } from '../utils/topicFingerprint.js';
 import { extractTypedEntities, mergeTypedEntities } from './entityExtractionService.js';
+import { generateEmbedding } from './embeddingService.js';
 import { detectLanguage } from './languageDetectionService.js';
 import { buildDetailedSummary } from './summaryGenerationService.js';
 import { translateStructuredSummary, translateText } from './translationService.js';
@@ -23,6 +25,7 @@ export const buildSourceItemEnrichment = async (item, { targetLanguage, deps = {
   const buildFingerprint = deps.buildTopicFingerprint ?? buildTopicFingerprint;
   const dedupeHashBuilder = deps.buildDedupeHash ?? buildDedupeHash;
   const buildEmbeddingInput = deps.buildNormalizedItemEmbeddingInput ?? buildNormalizedItemEmbeddingInput;
+  const createEmbedding = deps.generateEmbedding ?? generateEmbedding;
   const titleOriginal = normalizeText(item.title || '');
   const contentOriginal = normalizeText(item.rawText || item.title || '');
   const sourceLanguage = detect(`${titleOriginal} ${contentOriginal}`);
@@ -102,6 +105,9 @@ export const buildSourceItemEnrichment = async (item, { targetLanguage, deps = {
   };
 
   normalizedItem.embeddingInput = buildEmbeddingInput(normalizedItem);
+  normalizedItem.embedding = await createEmbedding(normalizedItem.embeddingInput);
+  normalizedItem.embeddingModel = normalizedItem.embedding?.length ? env.ZENADAM_EMBEDDING_MODEL : null;
+  normalizedItem.embeddingCreatedAt = normalizedItem.embedding?.length ? new Date() : null;
 
   return {
     sourceLanguage,

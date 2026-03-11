@@ -61,7 +61,10 @@ export const normalizePendingSourceItems = async ({
           normalizedDetailedSummary: enriched.normalizedItem.normalizedDetailedSummary,
           normalizedDetailedSummaryStructured: enriched.normalizedItem.structuredSummary,
           snippet: enriched.normalizedItem.snippet,
-          enrichmentMetadata: enriched.normalizedItem.enrichmentMetadata
+          enrichmentMetadata: {
+            ...(enriched.normalizedItem.enrichmentMetadata ?? {}),
+            embeddingCreatedAt: enriched.normalizedItem.embeddingCreatedAt ?? null
+          }
         });
 
         normalizedCount += 1;
