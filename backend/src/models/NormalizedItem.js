@@ -10,6 +10,8 @@ export const createNormalizedItemIndexes = async (db) => {
     collection.createIndex({ language: 1, clusterKey: 1 }),
     collection.createIndex({ clusteredAt: 1 }),
     collection.createIndex({ clusteringStatus: 1, publishedAt: -1 }),
-    collection.createIndex({ embeddingCreatedAt: -1 })
+    collection.createIndex({ embeddingCreatedAt: -1 }),
+    collection.createIndex({ enrichmentStatus: 1, updatedAt: -1 }),
+    collection.createIndex({ targetLanguage: 1, publishedAt: -1 })
   ]);
 };

@@ -1,20 +1,16 @@
 import { env } from '../config/env.js';
 import { getOpenAiClient } from './openAiService.js';
+import { buildNormalizedItemEmbeddingInput } from './embeddingInputBuilder.js';
 
 export const buildArticleEmbedding = (article) => {
-  const title = (article?.title ?? '').trim();
-  const normalizedDetailedSummary = (article?.normalizedDetailedSummary ?? '').trim();
-  const snippet = (article?.snippet ?? '').trim();
-  const content = (article?.content ?? '').trim();
-  const boundedContent = content ? content.slice(0, 800).trim() : '';
-
-  const detail = normalizedDetailedSummary || snippet || boundedContent;
-
-  if (!detail) {
-    return title;
+  const canonicalInput = buildNormalizedItemEmbeddingInput(article);
+  if (canonicalInput) {
+    return canonicalInput;
   }
 
-  return `${title}\n\n${detail}`;
+  const title = (article?.title ?? '').trim();
+  const snippet = (article?.snippet ?? '').trim();
+  return [title, snippet].filter(Boolean).join('\n\n');
 };
 
 export const generateEmbedding = async (text) => {
