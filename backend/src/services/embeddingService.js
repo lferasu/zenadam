@@ -1,26 +1,20 @@
 import { env } from '../config/env.js';
-
-let openAiClientPromise;
-
-const getOpenAiClient = async () => {
-  if (!openAiClientPromise) {
-    openAiClientPromise = import('openai').then(({ default: OpenAI }) => {
-      return new OpenAI({ apiKey: env.OPENAI_API_KEY });
-    });
-  }
-
-  return openAiClientPromise;
-};
+import { getOpenAiClient } from './openAiService.js';
 
 export const buildArticleEmbedding = (article) => {
   const title = (article?.title ?? '').trim();
+  const normalizedDetailedSummary = (article?.normalizedDetailedSummary ?? '').trim();
   const snippet = (article?.snippet ?? '').trim();
+  const content = (article?.content ?? '').trim();
+  const boundedContent = content ? content.slice(0, 800).trim() : '';
 
-  if (!snippet) {
+  const detail = normalizedDetailedSummary || snippet || boundedContent;
+
+  if (!detail) {
     return title;
   }
 
-  return `${title}\n\n${snippet}`;
+  return `${title}\n\n${detail}`;
 };
 
 export const generateEmbedding = async (text) => {

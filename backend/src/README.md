@@ -141,10 +141,13 @@ Zenadam keeps ingestion raw, then runs post-ingestion enrichment in two independ
    - Detects `sourceLanguage`
    - Resolves `targetLanguage` from `ZENADAM_TARGET_LANGUAGE` (default `am`)
    - Persists `normalizedTitle` and `normalizedDetailedSummary` on each source item
+   - When RSS body text is too thin, the normalizer may fetch the article URL to build a richer source-level summary from page content
+   - `normalizedDetailedSummary` is intentionally richer than `storySummary`: 3-5 bullets first, then an expanded paragraph with deeper source-level context
    - Tracks status with `normalizationStatus` (`pending | processing | ready | failed`)
 
 2. **Story summary refresh** (hooked to clustering)
    - On story creation and story attachment, refreshes story presentation fields in target language
+   - Keeps `storySummary` as the shorter multi-source synthesis layer above the richer source-item detail
    - Persists `storyTitle`, `storySummary`, `targetLanguage`
    - Tracks status with `storySummaryStatus` (`pending | processing | ready | stale | failed`)
 
@@ -172,3 +175,10 @@ npm run worker:pipeline
 ```
 
 To deploy in another product language, set `ZENADAM_TARGET_LANGUAGE` to that language code (for example `en`) without changing business logic.
+
+## Clustering notes
+
+- Embeddings now prefer `title + normalizedDetailedSummary`, then fall back to `title + snippet`, then bounded `content`, and finally `title` alone.
+- Full raw article embedding is not the default because it adds cost, latency, and noise; the richer bounded source summary is the preferred middle ground.
+- Retrieval remains vector-first, but scoring now adds dynamic topic-awareness from content-derived fingerprints (`keywords`, `phrases`, `geographies`, `entities`).
+- Attach decisions require both semantic similarity and topic coherence, so broad conflict/politics overlap is less likely to merge unrelated stories.

@@ -4,6 +4,7 @@ import { getDb } from '../config/database.js';
 import { NORMALIZED_ITEM_COLLECTION } from '../models/NormalizedItem.js';
 import { SOURCE_COLLECTION } from '../models/Source.js';
 import { STORY_COLLECTION, STORY_STATUS, STORY_SUMMARY_STATUS } from '../models/Story.js';
+import { mergeTopicSignatures } from '../utils/topicFingerprint.js';
 
 const getCollection = async () => {
   const db = await getDb();
@@ -11,6 +12,7 @@ const getCollection = async () => {
 };
 
 const toObjectId = (value) => (value instanceof ObjectId ? value : new ObjectId(value));
+const mergeStoryTopicSignature = (current, incoming) => mergeTopicSignatures(current, incoming);
 
 export const upsertStoryByClusterKey = async (story) => {
   const collection = await getCollection();
@@ -57,13 +59,15 @@ export const createStoryFromArticle = async (article) => {
 
   const publishedAt = article.publishedAt ? new Date(article.publishedAt) : now;
   const sourceId = toObjectId(article.sourceId);
-  const heroArticleId = article._id ? toObjectId(article._id) : toObjectId(article.sourceItemId);
+  const normalizedItemId = article._id ? toObjectId(article._id) : toObjectId(article.sourceItemId);
+  const heroArticleId = normalizedItemId;
 
   const result = await collection.insertOne({
     title: article.title,
     summary: article.snippet ?? null,
+    topicSignature: article.topicFingerprint ?? null,
     heroArticleId,
-    itemIds: [toObjectId(article.sourceItemId)],
+    itemIds: [normalizedItemId],
     sourceIds: [sourceId],
     articleCount: 1,
     sourceCount: 1,
@@ -86,12 +90,14 @@ export const attachArticleToStory = async ({ storyId, article }) => {
   const collection = await getCollection();
   const now = new Date();
   const publishedAt = article.publishedAt ? new Date(article.publishedAt) : now;
+  const normalizedItemId = article._id ? toObjectId(article._id) : toObjectId(article.sourceItemId);
+  const existingStory = await collection.findOne({ _id: toObjectId(storyId) }, { projection: { topicSignature: 1 } });
 
   const result = await collection.findOneAndUpdate(
     { _id: toObjectId(storyId) },
     {
       $addToSet: {
-        itemIds: toObjectId(article.sourceItemId),
+        itemIds: normalizedItemId,
         sourceIds: toObjectId(article.sourceId)
       },
       $max: {
@@ -101,6 +107,7 @@ export const attachArticleToStory = async ({ storyId, article }) => {
         lastSeenAt: now,
         storySummaryStatus: STORY_SUMMARY_STATUS.STALE,
         storySummaryError: null,
+        topicSignature: mergeStoryTopicSignature(existingStory?.topicSignature, article.topicFingerprint),
         updatedAt: now
       }
     },
@@ -126,7 +133,6 @@ export const attachArticleToStory = async ({ storyId, article }) => {
     { returnDocument: 'after' }
   );
 };
-
 
 export const updateStorySummaryProcessing = async ({ storyId, targetLanguage = env.ZENADAM_TARGET_LANGUAGE }) => {
   const collection = await getCollection();
@@ -449,6 +455,8 @@ export const mergeStoryIntoTarget = async ({ sourceStoryId, targetStoryId }) => 
     return { merged: false, reason: 'same_story' };
   }
 
+  const targetStory = await collection.findOne({ _id: targetId, status: STORY_STATUS.ACTIVE }, { projection: { topicSignature: 1 } });
+
   const targetResult = await collection.findOneAndUpdate(
     { _id: targetId, status: STORY_STATUS.ACTIVE },
     {
@@ -463,6 +471,7 @@ export const mergeStoryIntoTarget = async ({ sourceStoryId, targetStoryId }) => 
         lastSeenAt: now,
         storySummaryStatus: STORY_SUMMARY_STATUS.STALE,
         storySummaryError: null,
+        topicSignature: mergeStoryTopicSignature(targetStory?.topicSignature, sourceStory.topicSignature),
         updatedAt: now
       }
     },

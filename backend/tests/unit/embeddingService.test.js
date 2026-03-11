@@ -13,12 +13,21 @@ test('cosineSimilarity returns 0 for orthogonal vectors', () => {
   assert.equal(score, 0);
 });
 
-test('buildArticleEmbedding uses title and snippet when available', () => {
-  const text = buildArticleEmbedding({ title: 'Title', snippet: 'Snippet text' });
-  assert.equal(text, 'Title\n\nSnippet text');
+test('buildArticleEmbedding prefers title and normalized detailed summary when available', () => {
+  const text = buildArticleEmbedding({
+    title: 'Title',
+    normalizedDetailedSummary: 'Detailed summary text',
+    snippet: 'Snippet text'
+  });
+  assert.equal(text, 'Title\n\nDetailed summary text');
 });
 
-test('buildArticleEmbedding falls back to title only when snippet missing', () => {
-  const text = buildArticleEmbedding({ title: 'Only title', snippet: '' });
+test('buildArticleEmbedding falls back to snippet and then title only', () => {
+  const text = buildArticleEmbedding({ title: 'Only title', snippet: 'Snippet text' });
+  assert.equal(text, 'Only title\n\nSnippet text');
+});
+
+test('buildArticleEmbedding falls back to title only when no richer text is available', () => {
+  const text = buildArticleEmbedding({ title: 'Only title', snippet: '', normalizedDetailedSummary: '' });
   assert.equal(text, 'Only title');
 });

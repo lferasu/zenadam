@@ -44,10 +44,6 @@ const attachToExistingStory = async ({ article, bestStory, lookupMethod, deps })
     article
   });
 
-  if (updatedStory?._id) {
-    await deps.refreshStorySummary({ storyId: updatedStory._id });
-  }
-
   await deps.markNormalizedItemClusteringResult(article._id, {
     storyId: bestStory.storyId,
     clusteredAt: new Date(),
@@ -57,9 +53,28 @@ const attachToExistingStory = async ({ article, bestStory, lookupMethod, deps })
       lookupMethod,
       bestSimilarity: bestStory.bestSimilarity,
       supportCount: bestStory.supportCount,
-      recencyHours: bestStory.recencyHours
+      recencyHours: bestStory.recencyHours,
+      topicCoherence: bestStory.topicCoherence,
+      keywordOverlap: bestStory.keywordOverlap,
+      phraseOverlap: bestStory.phraseOverlap,
+      geographyOverlap: bestStory.geographyOverlap,
+      entityOverlap: bestStory.entityOverlap,
+      personOverlap: bestStory.personOverlap,
+      locationOverlap: bestStory.locationOverlap,
+      personOverlapBonus: bestStory.personOverlapBonus,
+      locationOverlapBonus: bestStory.locationOverlapBonus,
+      strongPersonLocationBonus: bestStory.strongPersonLocationBonus,
+      topicMismatchPenalty: bestStory.topicMismatchPenalty,
+      geographyMismatchPenalty: bestStory.geographyMismatchPenalty,
+      entityMismatchPenalty: bestStory.entityMismatchPenalty,
+      personMismatchPenalty: bestStory.personMismatchPenalty,
+      locationMismatchPenalty: bestStory.locationMismatchPenalty
     }
   });
+
+  if (updatedStory?._id) {
+    await deps.refreshStorySummary({ storyId: updatedStory._id });
+  }
 
   logger.info('Attached article to existing story', {
     normalizedItemId: String(article._id),
@@ -74,10 +89,6 @@ const attachToExistingStory = async ({ article, bestStory, lookupMethod, deps })
 const createNewStory = async ({ article, bestStory, lookupMethod, deps }) => {
   const story = await deps.createStoryFromArticle(article);
 
-  if (story?._id) {
-    await deps.refreshStorySummary({ storyId: story._id });
-  }
-
   await deps.markNormalizedItemClusteringResult(article._id, {
     storyId: story._id,
     clusteredAt: new Date(),
@@ -89,6 +100,10 @@ const createNewStory = async ({ article, bestStory, lookupMethod, deps }) => {
       bestCandidateScore: bestStory?.score ?? null
     }
   });
+
+  if (story?._id) {
+    await deps.refreshStorySummary({ storyId: story._id });
+  }
 
   logger.info('Created new story from article', {
     normalizedItemId: String(article._id),
@@ -136,7 +151,7 @@ export const createIncrementalClusteringRunner = (overrides = {}) => {
       const { lookupMethod, nearestCandidates } = await candidateRetrieval.retrieveNearestCandidates(article, embedding);
       const bestStory = evaluateStoryCandidates(article, nearestCandidates);
 
-      if (bestStory && selectClusteringAction({ bestStoryScore: bestStory.score, strongThreshold: resolvedEnv.SIMILARITY_STRONG_THRESHOLD }) === 'attach') {
+      if (bestStory && selectClusteringAction({ bestStory, strongThreshold: resolvedEnv.SIMILARITY_STRONG_THRESHOLD }) === 'attach') {
         return attachToExistingStory({
           article,
           bestStory,

@@ -61,10 +61,16 @@ export const createCandidateRetrieval = ({ deps, env, logger }) => {
           topSimilarities: nearestCandidates.slice(0, 3).map((item) => Number(item.similarity.toFixed(4)))
         });
 
-        return {
-          lookupMethod: 'vector_search',
-          nearestCandidates
-        };
+        if (!vectorCandidates.length) {
+          logger.warn('Vector search returned no candidates, falling back to recent-scan cosine flow', {
+            normalizedItemId: String(article._id)
+          });
+        } else {
+          return {
+            lookupMethod: 'vector_search',
+            nearestCandidates
+          };
+        }
       } catch (error) {
         logger.warn('Vector search unavailable, falling back to recent-scan cosine flow', {
           normalizedItemId: String(article._id),

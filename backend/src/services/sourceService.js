@@ -1,43 +1,73 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SOURCE_STATUS, SOURCE_TYPES } from '../models/Source.js';
-import { findSourceBySlug, upsertSourceBySlug } from '../repositories/sourceRepository.js';
+import { upsertSourceBySlug } from '../repositories/sourceRepository.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
 
-const BBC_AMHARIC_SOURCE = {
-  name: 'BBC Amharic',
-  slug: 'bbc-amharic',
-  type: SOURCE_TYPES.RSS,
-  status: SOURCE_STATUS.ACTIVE,
-  language: 'am',
-  category: 'news',
-  baseUrl: 'https://www.bbc.com/amharic',
-  entryUrls: [
-    'https://feeds.bbci.co.uk/amharic/rss.xml'
-  ],
-  fetchConfig: {
-    timeoutMs: 15000,
-    retries: 2,
-    retryDelayMs: 300,
-    userAgent: 'ZenadamBot/0.1 (+https://zenadam.local)'
-  },
-  parserConfig: {
-    preferredContentField: 'content:encoded',
-    preferredDateField: 'pubDate'
-  },
-  normalizationConfig: {
-    stripHtml: true,
-    summaryMaxLength: 800,
-    titleCleanupRules: []
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SOURCE_CONFIG_PATH = path.resolve(__dirname, '../../examples/source-configs.json');
+
+const VALID_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPES));
+const VALID_SOURCE_STATUSES = new Set(Object.values(SOURCE_STATUS));
+
+const loadSourceConfigs = async () => {
+  const raw = await fs.readFile(SOURCE_CONFIG_PATH, 'utf8');
+  const parsed = JSON.parse(raw);
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('Source config file must contain a non-empty array.');
   }
+
+  return parsed.map((source, index) => {
+    if (!source?.slug || !source?.name) {
+      throw new Error(`Source config at index ${index} is missing slug or name.`);
+    }
+
+    if (!VALID_SOURCE_TYPES.has(source.type)) {
+      throw new Error(`Source ${source.slug} has invalid type "${source.type}".`);
+    }
+
+    if (source.status && !VALID_SOURCE_STATUSES.has(source.status)) {
+      throw new Error(`Source ${source.slug} has invalid status "${source.status}".`);
+    }
+
+    if (!Array.isArray(source.entryUrls) || source.entryUrls.length === 0) {
+      throw new Error(`Source ${source.slug} must define at least one entry URL.`);
+    }
+
+    return {
+      ...source,
+      status: source.status ?? SOURCE_STATUS.ACTIVE
+    };
+  });
 };
 
 export const ensureDefaultSources = async () => {
   await ensureRuntimeInitialized();
 
-  const existing = await findSourceBySlug(BBC_AMHARIC_SOURCE.slug);
-  if (existing) {
-    return { created: false, source: existing };
+  const sourceConfigs = await loadSourceConfigs();
+  const results = [];
+
+  for (const sourceConfig of sourceConfigs) {
+    const result = await upsertSourceBySlug(sourceConfig);
+    const createdAt = result?.createdAt?.getTime?.() ?? null;
+    const updatedAt = result?.updatedAt?.getTime?.() ?? null;
+
+    results.push({
+      slug: result.slug,
+      created: createdAt !== null && updatedAt !== null && createdAt === updatedAt,
+      source: result
+    });
   }
 
-  const source = await upsertSourceBySlug(BBC_AMHARIC_SOURCE);
-  return { created: true, source };
+  return {
+    created: results.some((result) => result.created),
+    createdCount: results.filter((result) => result.created).length,
+    updatedCount: results.filter((result) => !result.created).length,
+    total: results.length,
+    source: results[0]?.source ?? null,
+    results
+  };
 };

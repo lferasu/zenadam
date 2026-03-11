@@ -1,7 +1,14 @@
+import { load as loadHtml } from 'cheerio';
 import { env } from '../config/env.js';
 import { normalizeText } from '../utils/text.js';
 
 const AMHARIC_REGEX = /[\u1200-\u137F]/;
+const MIN_BULLETS = 3;
+const MAX_BULLETS = 5;
+const MIN_PARAGRAPH_WORDS = 120;
+const MAX_DETAIL_SENTENCES = 12;
+const MIN_SOURCE_BODY_WORDS = 90;
+const ARTICLE_FETCH_TIMEOUT_MS = 12000;
 
 export const detectLanguage = (text = '') => {
   if (AMHARIC_REGEX.test(text)) {
@@ -13,9 +20,15 @@ export const detectLanguage = (text = '') => {
 
 const sentenceSplit = (text = '') =>
   text
-    .split(/(?<=[.!?።])\s+/u)
+    .split(/(?<=[.!?\u1362])\s+/u)
     .map((part) => part.trim())
     .filter(Boolean);
+
+const clauseSplit = (text = '') =>
+  text
+    .split(/[;,:]\s+/u)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 24);
 
 const shorten = (text = '', limit = 180) => {
   if (!text) return '';
@@ -23,21 +36,151 @@ const shorten = (text = '', limit = 180) => {
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`;
 };
 
-const buildDetailedSummary = ({ title, body, targetLanguage }) => {
-  const sentences = sentenceSplit(body);
-  const selected = sentences.slice(0, 4);
+const shortenParagraph = (text = '', limit = 1600) => {
+  if (!text) return '';
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`;
+};
 
-  if (!selected.length) {
+const countWords = (text = '') => text.split(/\s+/u).filter(Boolean).length;
+
+const uniqueStrings = (items = []) => {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const key = normalizeText(item).toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const cleanBullet = (text = '') => text.replace(/[.!?\u1362]+$/u, '').trim();
+
+const extractTextWithSelectors = ($, selectors = []) => {
+  const chunks = [];
+
+  for (const selector of selectors) {
+    $(selector).each((_, element) => {
+      const text = normalizeText($(element).text());
+      if (text.length >= 40) {
+        chunks.push(text);
+      }
+    });
+  }
+
+  return uniqueStrings(chunks).join(' ');
+};
+
+const fetchExpandedArticleBody = async (url) => {
+  if (!url) {
+    return '';
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'user-agent': 'ZenadamBot/0.1 (+https://zenadam.local)'
+      },
+      signal: AbortSignal.timeout(ARTICLE_FETCH_TIMEOUT_MS)
+    });
+
+    if (!response.ok) {
+      return '';
+    }
+
+    const html = await response.text();
+    const $ = loadHtml(html);
+
+    const selectorGroups = [
+      ['main article p', 'article p'],
+      ['main [data-component="text-block"] p', 'main [data-component="text-block"]'],
+      ['main [property="articleBody"] p', '[property="articleBody"] p'],
+      ['main p'],
+      ['p']
+    ];
+
+    for (const selectors of selectorGroups) {
+      const extracted = extractTextWithSelectors($, selectors);
+      if (countWords(extracted) >= MIN_PARAGRAPH_WORDS) {
+        return extracted;
+      }
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+};
+
+const buildBulletPoints = ({ title, sentences }) => {
+  const candidates = uniqueStrings([
+    ...sentences,
+    ...sentences.flatMap((sentence) => clauseSplit(sentence)),
+    title
+  ]).filter(Boolean);
+
+  const bullets = [];
+
+  for (const candidate of candidates) {
+    const bullet = shorten(cleanBullet(candidate), 220);
+    if (!bullet) {
+      continue;
+    }
+
+    bullets.push(bullet);
+    if (bullets.length === MAX_BULLETS) {
+      break;
+    }
+  }
+
+  return bullets.slice(0, Math.max(MIN_BULLETS, Math.min(MAX_BULLETS, bullets.length)));
+};
+
+const buildParagraph = ({ title, body, sentences, targetLanguage }) => {
+  const paragraphSentences = [];
+
+  for (const sentence of sentences.slice(0, MAX_DETAIL_SENTENCES)) {
+    paragraphSentences.push(sentence);
+    if (countWords(paragraphSentences.join(' ')) >= MIN_PARAGRAPH_WORDS) {
+      break;
+    }
+  }
+
+  let paragraph = paragraphSentences.join(' ').trim();
+
+  if (!paragraph) {
     return targetLanguage === 'am'
-      ? `ዝርዝር ማጠቃለያ፡ ${title || 'ይህ ንጥል መረጃ ርዕስ የለውም።'}`
-      : `Detailed summary: ${title || 'Source item has no title.'}`;
+      ? `ይህ ንጥል መረጃ ስለ ${title || 'ዜናው'} ተጨማሪ ዝርዝር አልያዘም።`
+      : `This source item does not provide enough article body text beyond ${title || 'the headline'}.`;
   }
 
-  if (targetLanguage === 'am') {
-    return `ዝርዝር ማጠቃለያ፡ ${selected.join(' ')}`;
+  if (countWords(paragraph) < MIN_PARAGRAPH_WORDS && body) {
+    paragraph = body;
   }
 
-  return `Detailed summary: ${selected.join(' ')}`;
+  return shortenParagraph(paragraph, 1600);
+};
+
+const buildDetailedSummary = ({ title, body, targetLanguage }) => {
+  const normalizedBody = normalizeText(body);
+  const sentences = uniqueStrings(sentenceSplit(normalizedBody));
+  const bullets = buildBulletPoints({ title, sentences });
+  const paragraph = buildParagraph({ title, body: normalizedBody, sentences, targetLanguage });
+
+  const heading = targetLanguage === 'am' ? 'ዝርዝር ማጠቃለያ፡' : 'Detailed summary:';
+  const paragraphLabel = targetLanguage === 'am' ? 'ተጨማሪ ማብራሪያ፡' : 'Expanded detail:';
+  const bulletSection = bullets.map((bullet) => `- ${bullet}`).join('\n');
+  const text = [heading, bulletSection, '', `${paragraphLabel} ${paragraph}`].filter(Boolean).join('\n');
+
+  return {
+    bullets,
+    paragraph,
+    text: shortenParagraph(text, 2200)
+  };
 };
 
 const buildNormalizedTitle = ({ title, body, targetLanguage }) => {
@@ -55,13 +198,30 @@ const buildNormalizedTitle = ({ title, body, targetLanguage }) => {
   return targetLanguage === 'am' ? 'ያልተሰየመ የዜና ንጥል' : 'Untitled source item';
 };
 
-export const generateSourceItemNormalization = async ({ title = '', body = '', targetLanguage = env.ZENADAM_TARGET_LANGUAGE }) => {
-  const rawText = normalizeText(`${title} ${body}`);
+export const generateSourceItemNormalization = async ({
+  title = '',
+  body = '',
+  url = '',
+  targetLanguage = env.ZENADAM_TARGET_LANGUAGE
+}) => {
+  let resolvedBody = normalizeText(body);
+
+  if (countWords(resolvedBody) < MIN_SOURCE_BODY_WORDS) {
+    const fetchedBody = await fetchExpandedArticleBody(url);
+    if (countWords(fetchedBody) > countWords(resolvedBody)) {
+      resolvedBody = fetchedBody;
+    }
+  }
+
+  const rawText = normalizeText(`${title} ${resolvedBody}`);
   const sourceLanguage = detectLanguage(rawText);
-  const normalizedTitle = buildNormalizedTitle({ title, body, targetLanguage });
-  const normalizedDetailedSummary = buildDetailedSummary({
+  const normalizedTitle = buildNormalizedTitle({ title, body: resolvedBody, targetLanguage });
+
+  // Source-item detail must stay richer than story-level synthesis:
+  // bullets provide scanability, the paragraph carries the deeper article-specific context.
+  const detail = buildDetailedSummary({
     title: normalizedTitle,
-    body: normalizeText(body),
+    body: resolvedBody,
     targetLanguage
   });
 
@@ -69,7 +229,11 @@ export const generateSourceItemNormalization = async ({ title = '', body = '', t
     sourceLanguage,
     targetLanguage,
     normalizedTitle,
-    normalizedDetailedSummary
+    normalizedDetailedSummary: detail.text,
+    normalizedDetailedSummaryStructured: {
+      bullets: detail.bullets,
+      paragraph: detail.paragraph
+    }
   };
 };
 

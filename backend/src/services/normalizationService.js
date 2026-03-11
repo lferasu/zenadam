@@ -7,15 +7,25 @@ import {
   markSourceItemNormalizationReady
 } from '../repositories/sourceItemRepository.js';
 import { upsertNormalizedItem } from '../repositories/normalizedItemRepository.js';
+import { extractTypedEntities, mergeTypedEntities } from './entityExtractionService.js';
 import { buildDedupeHash } from '../utils/hash.js';
 import { normalizeText, pickKeywords } from '../utils/text.js';
+import { buildTopicFingerprint } from '../utils/topicFingerprint.js';
 import { ensureRuntimeInitialized } from './runtimeService.js';
 
-const buildNormalizedRecord = (item, language) => {
+const buildNormalizedRecord = (item, normalization, typedEntities) => {
   const normalizedTitle = normalizeText(item.title || '');
   const normalizedContent = normalizeText(item.rawText || item.title || '');
   const snippet = normalizedContent.slice(0, 280) || normalizedTitle;
   const publishedAt = item.publishedAt ?? item.fetchedAt ?? null;
+  const topicFingerprint = buildTopicFingerprint({
+    title: normalization.normalizedTitle,
+    detailedSummary: normalization.normalizedDetailedSummary,
+    structuredSummary: normalization.normalizedDetailedSummaryStructured,
+    content: normalizedContent,
+    snippet,
+    typedEntities
+  });
 
   return {
     sourceItemId: item._id,
@@ -24,9 +34,14 @@ const buildNormalizedRecord = (item, language) => {
     title: normalizedTitle,
     snippet,
     content: normalizedContent,
-    language,
-    entities: [],
-    keywords: pickKeywords(normalizedTitle, normalizedContent),
+    normalizedDetailedSummary: normalization.normalizedDetailedSummary,
+    normalizedDetailedSummaryStructured: normalization.normalizedDetailedSummaryStructured,
+    language: normalization.sourceLanguage,
+    entities: topicFingerprint.entities,
+    persons: topicFingerprint.persons,
+    locations: topicFingerprint.locations,
+    keywords: uniqueKeywords(topicFingerprint.keywords, normalizedTitle, normalizedContent),
+    topicFingerprint,
     publishedAt,
     clusteringStatus: 'pending',
     dedupeHash: buildDedupeHash({
@@ -35,6 +50,10 @@ const buildNormalizedRecord = (item, language) => {
       publishedAt
     })
   };
+};
+
+const uniqueKeywords = (fingerprintKeywords, title, content) => {
+  return [...new Set([...(fingerprintKeywords ?? []), ...pickKeywords(title, content)])].slice(0, 8);
 };
 
 export const normalizePendingSourceItems = async ({ limit = env.ZENADAM_NORMALIZATION_BATCH_LIMIT } = {}) => {
@@ -60,17 +79,30 @@ export const normalizePendingSourceItems = async ({ limit = env.ZENADAM_NORMALIZ
       const normalization = await generateSourceItemNormalization({
         title: sourceItem.title || '',
         body: sourceItem.rawText || '',
+        url: sourceItem.url || '',
         targetLanguage
       });
 
-      const normalized = buildNormalizedRecord(sourceItem, normalization.sourceLanguage);
+      const typedEntities = mergeTypedEntities(
+        await extractTypedEntities({
+          text: [normalization.normalizedTitle, normalization.normalizedDetailedSummary].filter(Boolean).join('\n\n'),
+          language: normalization.sourceLanguage
+        }),
+        await extractTypedEntities({
+          text: [sourceItem.title || '', sourceItem.rawText || ''].filter(Boolean).join('\n\n'),
+          language: normalization.sourceLanguage
+        })
+      );
+
+      const normalized = buildNormalizedRecord(sourceItem, normalization, typedEntities);
       await upsertNormalizedItem(normalized);
 
       await markSourceItemNormalizationReady(sourceItem._id, {
         sourceLanguage: normalization.sourceLanguage,
         targetLanguage,
         normalizedTitle: normalization.normalizedTitle,
-        normalizedDetailedSummary: normalization.normalizedDetailedSummary
+        normalizedDetailedSummary: normalization.normalizedDetailedSummary,
+        normalizedDetailedSummaryStructured: normalization.normalizedDetailedSummaryStructured
       });
 
       normalizedCount += 1;
