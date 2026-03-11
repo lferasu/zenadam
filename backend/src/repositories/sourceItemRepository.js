@@ -108,6 +108,8 @@ export const markSourceItemNormalizationReady = async (id, payload) => {
         normalizedDetailedSummaryStructured: payload.normalizedDetailedSummaryStructured,
         normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.READY,
         normalizationError: null,
+        normalizationMetadata: payload.enrichmentMetadata ?? null,
+        normalizedSnippet: payload.snippet ?? null,
         normalizationUpdatedAt: now,
         updatedAt: now
       }
@@ -115,7 +117,7 @@ export const markSourceItemNormalizationReady = async (id, payload) => {
   );
 };
 
-export const markSourceItemNormalizationFailed = async (id, errorMessage) => {
+export const markSourceItemNormalizationFailed = async (id, errorMessage, metadata = null) => {
   const collection = await getCollection();
 
   return collection.updateOne(
@@ -124,6 +126,7 @@ export const markSourceItemNormalizationFailed = async (id, errorMessage) => {
       $set: {
         normalizationStatus: SOURCE_ITEM_NORMALIZATION_STATUS.FAILED,
         normalizationError: errorMessage,
+        normalizationMetadata: metadata,
         normalizationUpdatedAt: new Date(),
         updatedAt: new Date()
       }
