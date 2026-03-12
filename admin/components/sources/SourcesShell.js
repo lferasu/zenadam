@@ -87,56 +87,51 @@ export function SourcesShell({ searchQuery = '' }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="panel-subtle rounded-[22px] p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-xl">
-            <p className="text-xs uppercase tracking-[0.18em] text-text-muted">Search sources</p>
-            <p className="mt-1 text-[15px] leading-6 text-text-muted">
-              Search by source name, slug, URL, type, language, or candidate status.
-            </p>
-          </div>
-          <div className="w-full lg:max-w-xl">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="search"
-                value={localQuery}
-                onChange={(event) => setLocalQuery(event.target.value)}
-                placeholder="Search sources..."
-                className="input-surface min-w-0 flex-1 rounded-2xl px-4 py-3 text-[15px] text-text outline-none transition placeholder:text-text-muted focus:border-accent focus:bg-surface-strong"
-              />
-              <Link
-                href="/sources/new"
-                className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-5 text-[15px] font-semibold text-accent-contrast shadow-[0_12px_30px_rgba(34,197,94,0.22)] transition hover:-translate-y-0.5"
-              >
-                Add source
-              </Link>
+    <div className="space-y-3 sm:space-y-4">
+      <div className="panel-subtle rounded-[20px] p-3 sm:rounded-[22px] sm:p-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-text-muted">Search sources</p>
+              <p className="mt-1 text-sm leading-5 text-text-muted">Name, slug, URL, type, language, or status.</p>
             </div>
+            <Link
+              href="/sources/new"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-contrast shadow-[0_12px_30px_rgba(34,197,94,0.22)] transition hover:-translate-y-0.5 sm:hidden"
+            >
+              Add
+            </Link>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="search"
+              value={localQuery}
+              onChange={(event) => setLocalQuery(event.target.value)}
+              placeholder="Search sources..."
+              className="input-surface min-w-0 flex-1 rounded-2xl px-4 py-3 text-[15px] text-text outline-none transition placeholder:text-text-muted focus:border-accent focus:bg-surface-strong"
+            />
+            <Link
+              href="/sources/new"
+              className="hidden min-h-11 items-center justify-center rounded-full bg-accent px-5 text-[15px] font-semibold text-accent-contrast shadow-[0_12px_30px_rgba(34,197,94,0.22)] transition hover:-translate-y-0.5 sm:inline-flex"
+            >
+              Add source
+            </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="card-surface rounded-[22px] p-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-text-muted">All sources</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <p className="text-3xl font-semibold text-text">{counts.total}</p>
-            <p className="text-right text-[13px] leading-5 text-text-muted">Active + candidates</p>
-          </div>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="card-surface rounded-[18px] px-3 py-3 sm:rounded-[22px] sm:p-4">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted sm:text-xs sm:tracking-[0.24em]">All</p>
+          <p className="mt-2 text-2xl font-semibold text-text sm:text-3xl">{counts.total}</p>
         </div>
-        <div className="card-surface rounded-[22px] p-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-text-muted">Active</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <p className="text-3xl font-semibold text-text">{counts.active}</p>
-            <p className="text-right text-[13px] leading-5 text-text-muted">Read-only sources</p>
-          </div>
+        <div className="card-surface rounded-[18px] px-3 py-3 sm:rounded-[22px] sm:p-4">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted sm:text-xs sm:tracking-[0.24em]">Active</p>
+          <p className="mt-2 text-2xl font-semibold text-text sm:text-3xl">{counts.active}</p>
         </div>
-        <div className="card-surface rounded-[22px] p-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-text-muted">Candidates</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <p className="text-3xl font-semibold text-text">{counts.candidate}</p>
-            <p className="text-right text-[13px] leading-5 text-text-muted">Editable intake</p>
-          </div>
+        <div className="card-surface rounded-[18px] px-3 py-3 sm:rounded-[22px] sm:p-4">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted sm:text-xs sm:tracking-[0.24em]">Candidates</p>
+          <p className="mt-2 text-2xl font-semibold text-text sm:text-3xl">{counts.candidate}</p>
         </div>
       </div>
 

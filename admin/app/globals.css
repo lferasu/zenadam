@@ -168,6 +168,15 @@ textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
+.input-surface::placeholder {
+  transition: color 140ms ease, opacity 140ms ease;
+}
+
+.input-surface:focus::placeholder {
+  color: transparent;
+  opacity: 0;
+}
+
 .app-header {
   border: 1px solid var(--ui-header-line);
   background: var(--ui-header-bg);
