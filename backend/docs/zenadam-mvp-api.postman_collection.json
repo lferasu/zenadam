@@ -1,0 +1,300 @@
+{
+  "info": {
+    "_postman_id": "7b18d6aa-5d4c-4ef5-88fc-4f5ff55d6c83",
+    "name": "Zenadam MVP API",
+    "description": "Postman collection for Zenadam consumer story APIs and admin source-management APIs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:10000/api/v1"
+    },
+    {
+      "key": "storyId",
+      "value": "PUT_STORY_ID_HERE"
+    },
+    {
+      "key": "sourceId",
+      "value": "PUT_SOURCE_ID_HERE"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Consumer",
+      "item": [
+        {
+          "name": "List Stories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stories?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stories"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Story By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stories/{{storyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stories",
+                "{{storyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Story Articles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stories/{{storyId}}/articles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stories",
+                "{{storyId}}",
+                "articles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Inspection List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stories/inspection?limit=10&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stories",
+                "inspection"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Inspection Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stories/inspection/{{storyId}}?debug=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stories",
+                "inspection",
+                "{{storyId}}"
+              ],
+              "query": [
+                {
+                  "key": "debug",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Sources",
+      "item": [
+        {
+          "name": "List Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Source By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources/{{sourceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources",
+                "{{sourceId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate RSS Source",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"test-rss-source\",\n  \"name\": \"Test RSS Source\",\n  \"type\": \"rss\",\n  \"baseUrl\": \"https://feeds.bbci.co.uk\",\n  \"feedUrl\": \"https://feeds.bbci.co.uk/amharic/rss.xml\",\n  \"language\": \"am\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Scraper Source",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"test-scraper-source\",\n  \"name\": \"Test Scraper Source\",\n  \"type\": \"scraper\",\n  \"baseUrl\": \"https://example.com\",\n  \"language\": \"en\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Source",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"test-rss-source\",\n  \"name\": \"Test RSS Source\",\n  \"type\": \"rss\",\n  \"baseUrl\": \"https://feeds.bbci.co.uk\",\n  \"feedUrl\": \"https://feeds.bbci.co.uk/amharic/rss.xml\",\n  \"language\": \"am\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Patch Source",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test RSS Source Updated\",\n  \"feedUrl\": \"https://feeds.bbci.co.uk/amharic/rss.xml\",\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/sources/{{sourceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sources",
+                "{{sourceId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

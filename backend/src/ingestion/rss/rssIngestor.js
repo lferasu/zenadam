@@ -67,7 +67,7 @@ const normalizeText = (text, { stripHtml = false, summaryMaxLength = DEFAULT_SUM
   return `${collapsed.slice(0, summaryMaxLength).trim()}…`;
 };
 
-const parseFeedItems = (xmlText) => {
+export const parseFeedItems = (xmlText) => {
   const parsed = parser.parse(xmlText);
   const rssItems = asArray(parsed?.rss?.channel?.item);
 
@@ -160,7 +160,7 @@ const mapEntryToSourceItem = (source, entry) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchFeedXml = async (url, fetchConfig = {}) => {
+export const fetchFeedXml = async (url, fetchConfig = {}) => {
   const timeoutMs = Number(fetchConfig.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const userAgent = fetchConfig.userAgent ?? DEFAULT_USER_AGENT;
   const retries = Number(fetchConfig.retries ?? DEFAULT_RETRIES);
