@@ -1,0 +1,4 @@
+name = "zenadam-admin-ui"
+description = "UI agent for Zenadam admin frontend experiences"
+
+prompt_file = "prompts/zenadam-admin-ui.md"
