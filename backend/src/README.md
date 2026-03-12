@@ -11,6 +11,7 @@ This folder contains the backend scaffolding for the Zenadam MVP.
 - `../docs/source-audit.md`: source audit command, report format, and status interpretation.
 - `../docs/source-prune.md`: prune failed sources (dry-run/apply).
 - `../docs/story-reconciliation.md`: safe merge pass for fragmented singleton stories.
+- `../docs/zenadam-mvp-api.postman_collection.json`: Postman collection for consumer and admin MVP APIs.
 - `../examples/source-configs.json`: example source documents for rss/scraper/api.
 
 ## API endpoints
@@ -31,22 +32,18 @@ Returns API health and request context.
 
 ### GET `/stories`
 
-Read-only story inspection endpoint for clustering validation.
+Consumer story feed endpoint for the MVP app.
 
 Query params:
 
-- `page` (default `1`)
 - `limit` (default `25`, max `100`)
-- `sort` (`recent` default, `created_desc`, `created_asc`, `article_count_desc`)
-- `hasSummary` (`true`/`false`)
-- `minArticleCount` (positive integer)
 
-Response `data` is a list of stories containing:
+Response `data` is a list of feed-ready stories containing:
 
 - `id`, `title`, `summary`
-- `articleCount`
-- `latestArticleAt`, `createdAt`
-- `previewArticles` (up to 3 with `title`, `source`, `publishedAt`)
+- `sourceCount`
+- `latestPublishedAt`, `updatedAt`
+- `sourcePreview` (lightweight source-name preview when available)
 
 Example:
 
@@ -57,40 +54,26 @@ Example:
       "id": "665f9d0e76f4871a7fcb4f03",
       "title": "Representative headline",
       "summary": "Story summary",
-      "articleCount": 4,
-      "latestArticleAt": "2026-02-16T11:20:00.000Z",
-      "createdAt": "2026-02-15T06:30:00.000Z",
-      "previewArticles": [
-        {
-          "title": "Newest article",
-          "source": "Reuters",
-          "publishedAt": "2026-02-16T11:20:00.000Z"
-        }
-      ]
+      "sourceCount": 4,
+      "latestPublishedAt": "2026-02-16T11:20:00.000Z",
+      "updatedAt": "2026-02-16T11:21:00.000Z",
+      "sourcePreview": ["Reuters", "BBC"]
     }
   ],
   "meta": {
     "requestId": "b4f8...",
     "pagination": {
-      "page": 1,
       "limit": 25,
-      "total": 1,
-      "totalPages": 1,
-      "hasNextPage": false,
-      "hasPrevPage": false
+      "count": 1
     }
   },
   "error": null
 }
 ```
 
-### GET `/stories/:id`
+### GET `/stories/:storyId`
 
-Returns full story details and all related articles ordered by `publishedAt DESC`.
-
-Optional query param:
-
-- `debug=true` to include safe clustering diagnostics already stored in normalized items (`clusteringScore`, `clusteringMetadata`) and story-level representative article id.
+Returns one consumer-facing story for the story-detail screen.
 
 Example:
 
@@ -100,38 +83,117 @@ Example:
     "id": "665f9d0e76f4871a7fcb4f03",
     "title": "Representative headline",
     "summary": "Story summary",
-    "createdAt": "2026-02-15T06:30:00.000Z",
-    "updatedAt": "2026-02-16T11:21:00.000Z",
+    "sourceCount": 3,
     "articleCount": 4,
-    "articles": [
+    "latestPublishedAt": "2026-02-16T11:20:00.000Z",
+    "updatedAt": "2026-02-16T11:21:00.000Z",
+    "articlePreviews": [
       {
         "id": "665f9cf676f4871a7fcb4eff",
-        "source": "Reuters",
-        "sourceType": "rss",
         "title": "Newest article",
-        "url": "https://example.com/news/a",
+        "summary": "Normalized article summary",
+        "snippet": "Normalized snippet",
+        "sourceName": "Reuters",
+        "canonicalUrl": "https://example.com/news/a",
         "publishedAt": "2026-02-16T11:20:00.000Z",
-        "language": "en",
-        "createdAt": "2026-02-16T11:20:10.000Z",
-        "debug": {
-          "clusteringScore": 0.84,
-          "clusteringMetadata": {
-            "lookupMethod": "vector"
-          }
-        }
+        "targetLanguage": "am"
       }
-    ],
-    "debug": {
-      "representativeArticleId": "665f9cf676f4871a7fcb4eff"
-    }
+    ]
   },
   "meta": {
-    "requestId": "b4f8...",
-    "debug": true
+    "requestId": "b4f8..."
   },
   "error": null
 }
 ```
+
+### GET `/stories/:storyId/articles`
+
+Returns the normalized/enriched articles for a selected story, ordered by `publishedAt DESC`.
+
+Consumer article values come from normalized items, not raw source-item ingestion fields.
+
+Example:
+
+```json
+{
+  "data": {
+    "storyId": "665f9d0e76f4871a7fcb4f03",
+    "title": "Representative headline",
+    "articleCount": 4,
+    "articles": [
+      {
+        "id": "665f9cf676f4871a7fcb4eff",
+        "storyId": "665f9d0e76f4871a7fcb4f03",
+        "title": "Normalized article title",
+        "summary": "Normalized detailed summary",
+        "snippet": "Normalized snippet",
+        "sourceName": "Reuters",
+        "publishedAt": "2026-02-16T11:20:00.000Z",
+        "canonicalUrl": "https://example.com/news/a",
+        "targetLanguage": "am"
+      }
+    ]
+  },
+  "meta": {
+    "requestId": "b4f8..."
+  },
+  "error": null
+}
+```
+
+### GET `/stories/inspection`
+
+Preserved read-only inspection endpoint for clustering validation.
+
+Query params:
+
+- `page` (default `1`)
+- `limit` (default `25`, max `100`)
+- `sort` (`recent` default, `created_desc`, `created_asc`, `article_count_desc`)
+- `hasSummary` (`true`/`false`)
+- `minArticleCount` (positive integer)
+
+### GET `/stories/inspection/:id`
+
+Preserved inspection detail endpoint.
+
+Optional query param:
+
+- `debug=true` to include stored clustering diagnostics
+
+### GET `/admin/sources`
+
+Admin source registry list endpoint.
+
+Useful response fields include:
+
+- `id`, `slug`, `name`, `type`
+- `baseUrl`, `feedUrl`, `language`
+- `isActive`
+- `validationStatus`, `lastValidatedAt`, `lastValidationMessage`
+- `createdAt`, `updatedAt`
+
+### GET `/admin/sources/:sourceId`
+
+Returns one configured source for admin edit/detail views.
+
+### POST `/admin/sources/validate`
+
+Validates a candidate source definition without saving it.
+
+Validation flow:
+
+- RSS/API sources: validate URL, fetch, parse, and confirm at least one item exists
+- Scraper sources: validate URL, fetch page, confirm readable HTML for MVP
+
+### POST `/admin/sources`
+
+Creates a new source after server-side validation.
+
+### PATCH `/admin/sources/:sourceId`
+
+Updates an existing source and revalidates server-side before saving.
 
 ## Normalization and story summary refresh
 
@@ -175,6 +237,12 @@ npm run worker:pipeline
 ```
 
 To deploy in another product language, set `ZENADAM_TARGET_LANGUAGE` to that language code (for example `en`) without changing business logic.
+
+## Consumer/Admin API notes
+
+- Consumer story/article endpoints return normalized/enriched values for product display.
+- Raw source-item ingestion fields are not exposed directly in consumer article responses.
+- Admin source management is intentionally limited to registry CRUD + validate-before-save for MVP.
 
 ## Clustering notes
 

@@ -12,6 +12,21 @@ export const findSourceBySlug = async (slug) => {
   return collection.findOne({ slug });
 };
 
+export const listSources = async ({ status, type, limit = 100, skip = 0 } = {}) => {
+  const collection = await getCollection();
+  const query = {};
+
+  if (status) {
+    query.status = status;
+  }
+
+  if (type) {
+    query.type = type;
+  }
+
+  return collection.find(query).sort({ updatedAt: -1, createdAt: -1 }).skip(skip).limit(limit).toArray();
+};
+
 export const findActiveSourcesByType = async (type) => {
   const collection = await getCollection();
   const query = { status: SOURCE_STATUS.ACTIVE };
@@ -74,6 +89,44 @@ export const upsertSourceBySlug = async (source) => {
 export const findSourceById = async (id) => {
   const collection = await getCollection();
   return collection.findOne({ _id: new ObjectId(id) });
+};
+
+export const findSourceByBaseUrl = async (baseUrl) => {
+  const collection = await getCollection();
+  return collection.findOne({ baseUrl });
+};
+
+export const findSourceByEntryUrl = async (entryUrl) => {
+  const collection = await getCollection();
+  return collection.findOne({ entryUrls: entryUrl });
+};
+
+export const createSource = async (source) => {
+  const collection = await getCollection();
+  const now = new Date();
+  const document = {
+    ...source,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  const result = await collection.insertOne(document);
+  return collection.findOne({ _id: result.insertedId });
+};
+
+export const updateSourceById = async (id, updates) => {
+  const collection = await getCollection();
+
+  return collection.findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        ...updates,
+        updatedAt: new Date()
+      }
+    },
+    { returnDocument: 'after' }
+  );
 };
 
 export const deleteSourcesByIds = async (sourceIds = []) => {

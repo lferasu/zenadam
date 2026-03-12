@@ -2,8 +2,11 @@ import { ObjectId } from 'mongodb';
 import { STORY_STATUS } from '../models/Story.js';
 import { findUnclusteredNormalizedItems, markNormalizedItemsClustered } from '../repositories/normalizedItemRepository.js';
 import {
+  findStoryForConsumerById,
   findStoryForInspectionById,
+  listConsumerStoryArticles,
   listActiveStories,
+  listStoriesForConsumer,
   listStoriesForInspection,
   upsertStoryByClusterKey
 } from '../repositories/storyRepository.js';
@@ -83,6 +86,39 @@ export const generateStoriesFromLegacyClusterKeys = async ({ limit = 250 } = {})
 
 const toIso = (value) => (value?.toISOString?.() ? value.toISOString() : null);
 
+export const mapConsumerStoryListItem = (story) => ({
+  id: String(story._id),
+  title: story.storyTitle ?? story.title,
+  summary: story.storySummary ?? story.summary ?? null,
+  sourceCount: story.sourceCount ?? 0,
+  latestPublishedAt: toIso(story.latestPublishedAt),
+  updatedAt: toIso(story.updatedAt),
+  sourcePreview: (story.sourcePreview ?? []).map((item) => item.sourceName).filter(Boolean)
+});
+
+export const mapConsumerStoryArticle = (article) => ({
+  id: String(article._id),
+  storyId: article.storyId ? String(article.storyId) : null,
+  title: article.title,
+  summary: article.summary ?? null,
+  snippet: article.snippet ?? null,
+  sourceName: article.sourceName ?? null,
+  publishedAt: toIso(article.publishedAt),
+  canonicalUrl: article.canonicalUrl ?? null,
+  targetLanguage: article.targetLanguage ?? null
+});
+
+export const mapConsumerStoryDetail = (story) => ({
+  id: String(story._id),
+  title: story.storyTitle ?? story.title,
+  summary: story.storySummary ?? story.summary ?? null,
+  sourceCount: story.sourceCount ?? 0,
+  articleCount: story.articleCount ?? 0,
+  latestPublishedAt: toIso(story.latestPublishedAt),
+  updatedAt: toIso(story.updatedAt),
+  articlePreviews: (story.articlePreviews ?? []).map(mapConsumerStoryArticle)
+});
+
 export const mapInspectionStoryListItem = (story) => ({
   id: String(story._id),
   title: story.storyTitle ?? story.title,
@@ -100,18 +136,81 @@ export const mapInspectionStoryListItem = (story) => ({
 export const getFeedStories = async ({ limit = 25 } = {}) => {
   await ensureRuntimeInitialized();
 
-  const stories = await listActiveStories({ limit });
+  const stories = await listStoriesForConsumer({ limit });
 
   return stories.map((story) => ({
-    id: String(story._id),
-    title: story.storyTitle ?? story.title,
-    summary: story.storySummary ?? story.summary,
-    heroImageUrl: null,
-    sourceCount: Array.isArray(story.sourceIds) ? story.sourceIds.length : story.sourceCount ?? 0,
-    itemCount: Array.isArray(story.itemIds) ? story.itemIds.length : story.articleCount ?? 0,
-    updatedAt: story.updatedAt?.toISOString?.() ?? null,
-    language: story.targetLanguage ?? story.language
+    ...mapConsumerStoryListItem(story),
+    heroImageUrl: null
   }));
+};
+
+export const getConsumerStories = async ({ limit = 25 } = {}) => {
+  await ensureRuntimeInitialized();
+
+  const items = await listStoriesForConsumer({ limit });
+
+  return {
+    items: items.map(mapConsumerStoryListItem),
+    pagination: {
+      limit,
+      count: items.length
+    }
+  };
+};
+
+export const getConsumerStoryById = async ({ id }) => {
+  await ensureRuntimeInitialized();
+
+  if (!ObjectId.isValid(id)) {
+    const error = new Error('Invalid story id');
+    error.code = 'INVALID_STORY_ID';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const story = await findStoryForConsumerById({ id });
+  if (!story) {
+    const error = new Error('Story not found');
+    error.code = 'STORY_NOT_FOUND';
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return mapConsumerStoryDetail(story);
+};
+
+export const getConsumerStoryArticles = async ({ storyId }) => {
+  await ensureRuntimeInitialized();
+
+  if (!ObjectId.isValid(storyId)) {
+    const error = new Error('Invalid story id');
+    error.code = 'INVALID_STORY_ID';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const story = await findStoryForConsumerById({ id: storyId });
+  if (!story) {
+    const error = new Error('Story not found');
+    error.code = 'STORY_NOT_FOUND';
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const articles = await listConsumerStoryArticles({ storyId });
+  if (!articles.length) {
+    const error = new Error('Story has no articles');
+    error.code = 'STORY_NO_ARTICLES';
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    storyId,
+    title: story.storyTitle ?? story.title,
+    articleCount: articles.length,
+    articles: articles.map(mapConsumerStoryArticle)
+  };
 };
 
 export const getStoriesForInspection = async ({ page, limit, sort, hasSummary, minArticleCount }) => {

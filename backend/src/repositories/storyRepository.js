@@ -216,6 +216,178 @@ export const listActiveStories = async ({ limit = 50 } = {}) => {
     .toArray();
 };
 
+export const listStoriesForConsumer = async ({ limit = 25, skip = 0 } = {}) => {
+  const collection = await getCollection();
+
+  return collection
+    .aggregate([
+      { $match: { status: STORY_STATUS.ACTIVE } },
+      {
+        $addFields: {
+          sourceCountComputed: { $size: { $ifNull: ['$sourceIds', []] } },
+          articleCountComputed: { $size: { $ifNull: ['$itemIds', []] } },
+          latestPublishedAt: { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] }
+        }
+      },
+      { $sort: { latestPublishedAt: -1, updatedAt: -1, _id: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            { $sort: { publishedAt: -1, createdAt: -1 } },
+            { $limit: 3 },
+            {
+              $lookup: {
+                from: SOURCE_COLLECTION,
+                localField: 'sourceId',
+                foreignField: '_id',
+                as: 'source'
+              }
+            },
+            {
+              $project: {
+                _id: 0,
+                sourceName: {
+                  $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+                }
+              }
+            }
+          ],
+          as: 'sourcePreview'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          summary: 1,
+          storyTitle: 1,
+          storySummary: 1,
+          sourceCount: '$sourceCountComputed',
+          articleCount: '$articleCountComputed',
+          latestPublishedAt: 1,
+          updatedAt: 1,
+          sourcePreview: 1
+        }
+      }
+    ])
+    .toArray();
+};
+
+export const findStoryForConsumerById = async ({ id }) => {
+  const collection = await getCollection();
+
+  const [story] = await collection
+    .aggregate([
+      {
+        $match: {
+          _id: toObjectId(id),
+          status: STORY_STATUS.ACTIVE
+        }
+      },
+      {
+        $addFields: {
+          sourceCountComputed: { $size: { $ifNull: ['$sourceIds', []] } },
+          articleCountComputed: { $size: { $ifNull: ['$itemIds', []] } },
+          latestPublishedAt: { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] }
+        }
+      },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            { $sort: { publishedAt: -1, createdAt: -1 } },
+            { $limit: 5 },
+            {
+              $lookup: {
+                from: SOURCE_COLLECTION,
+                localField: 'sourceId',
+                foreignField: '_id',
+                as: 'source'
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                title: { $ifNull: ['$normalizedTitle', '$title'] },
+                summary: { $ifNull: ['$normalizedDetailedSummary', '$content'] },
+                snippet: 1,
+                canonicalUrl: 1,
+                publishedAt: 1,
+                sourceName: {
+                  $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+                }
+              }
+            }
+          ],
+          as: 'articlePreviews'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          summary: 1,
+          storyTitle: 1,
+          storySummary: 1,
+          sourceCount: '$sourceCountComputed',
+          articleCount: '$articleCountComputed',
+          latestPublishedAt: 1,
+          updatedAt: 1,
+          articlePreviews: 1
+        }
+      }
+    ])
+    .toArray();
+
+  return story ?? null;
+};
+
+export const listConsumerStoryArticles = async ({ storyId }) => {
+  const db = await getDb();
+
+  return db
+    .collection(NORMALIZED_ITEM_COLLECTION)
+    .aggregate([
+      {
+        $match: {
+          storyId: toObjectId(storyId)
+        }
+      },
+      { $sort: { publishedAt: -1, createdAt: -1 } },
+      {
+        $lookup: {
+          from: SOURCE_COLLECTION,
+          localField: 'sourceId',
+          foreignField: '_id',
+          as: 'source'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          storyId: 1,
+          title: { $ifNull: ['$normalizedTitle', '$title'] },
+          summary: { $ifNull: ['$normalizedDetailedSummary', '$content'] },
+          snippet: 1,
+          canonicalUrl: 1,
+          publishedAt: 1,
+          targetLanguage: 1,
+          sourceName: {
+            $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+          }
+        }
+      }
+    ])
+    .toArray();
+};
+
 const buildStorySort = (sort) => {
   if (sort === 'created_asc') {
     return { createdAt: 1, _id: 1 };
