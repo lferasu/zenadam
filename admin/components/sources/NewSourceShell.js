@@ -74,37 +74,38 @@ export function NewSourceShell() {
   }
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]">
-      <div className="panel rounded-[30px] p-5 shadow-glow sm:p-6">
-        <div className="flex flex-col gap-4 border-b border-line pb-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent">Add source</p>
-            <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold text-text">
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+      <div className="panel rounded-[26px] p-4 shadow-glow sm:rounded-[30px] sm:p-6">
+        <div className="flex flex-col gap-4 border-b border-line pb-4 sm:pb-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/sources"
+              className="ghost-surface inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-medium text-text"
+            >
+              Sources
+            </Link>
+            <Link
+              href="/sources"
+              className="ghost-surface inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-medium text-text"
+            >
+              Go back
+            </Link>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent sm:text-sm">Add source</p>
+            <h2 className="mt-2 font-[family-name:var(--font-display)] text-[2rem] font-semibold leading-tight text-text sm:text-3xl">
               Queue a new candidate source
             </h2>
-            <p className="mt-3 max-w-2xl text-[15px] leading-7 text-text-muted">
-              Fill in the basics, validate when helpful, and save even if the feed is having a bad day.
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-text-muted">
+              Fill in the basics, validate if helpful, then save.
             </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/sources"
-                className="ghost-surface inline-flex min-h-11 items-center justify-center rounded-full px-4 text-[15px] font-medium text-text"
-              >
-                Sources
-              </Link>
-              <Link
-                href="/sources"
-                className="ghost-surface inline-flex min-h-11 items-center justify-center rounded-full px-4 text-[15px] font-medium text-text"
-              >
-                Go back
-              </Link>
-            </div>
+          </div>
+          <div className="panel-subtle rounded-2xl px-4 py-3 text-sm leading-6 text-text-muted xl:hidden">
+            New sources go into the candidate queue. Validation is guidance only and never blocks saving.
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-4 sm:mt-6">
           <SourceForm
             form={form}
             onChange={handleChange}
@@ -112,11 +113,27 @@ export function NewSourceShell() {
             onValidate={handleValidate}
             isSubmitting={isSubmitting}
             isValidating={isValidating}
+            validationSection={
+              <div className="space-y-3 xl:hidden">
+                {error ? (
+                  <div className="rounded-2xl border border-danger/25 bg-danger/10 p-3 text-[15px] leading-6 text-danger">
+                    {error}
+                  </div>
+                ) : null}
+                {validation ? (
+                  <ValidationResultsPanel validationStatus={validationStatus} validationResults={validation} compact />
+                ) : (
+                  <div className="panel-subtle rounded-2xl p-4 text-sm leading-6 text-text-muted">
+                    Validation has not run yet. You can still save this source directly to `candidate_sources`.
+                  </div>
+                )}
+              </div>
+            }
           />
         </div>
       </div>
 
-      <aside className="space-y-4">
+      <aside className="hidden space-y-4 xl:block">
         <div className="panel rounded-[30px] p-5 sm:p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-info">How this works</p>
           <div className="mt-4 space-y-4 text-[15px] leading-7 text-text-muted">
