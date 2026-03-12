@@ -1,15 +1,11 @@
-# Zenadam MVP Backend (BBC Amharic Source-to-Feed Slice)
+# Zenadam
 
-JavaScript monorepo for the Zenadam MVP backend, including a working source-to-feed slice for BBC Amharic RSS ingestion.
+JavaScript monorepo for the Zenadam backend and the first admin UI iteration for source management.
 
 ## Repository structure
 
 ```text
 zenadam/
-  apps/
-    mobile/                      # React Native app (future)
-    web/                         # Web app (future)
-    admin/                       # Admin frontend (future)
   backend/
     package.json
     src/
@@ -42,16 +38,26 @@ zenadam/
     scripts/
     deployment/
       render.yaml
+  admin/
+    app/
+    components/
+    hooks/
+    lib/
+    services/
+    package.json
   docs/
-    zenadam-mvp-technical-spec.md
   .env.example
+  README.md
 ```
 
 ## Implemented capabilities
 
 - Express API bootstrap with shared JSON envelope shape.
+- Top-level Next.js admin UI at `admin/` for mobile-first source management.
 - Health route at `GET /api/v1/health`.
 - Feed route at `GET /api/v1/feed` with optional `?limit=<n>`.
+- Combined admin source listing across `sources` and `candidate_sources`.
+- Candidate-source create/update APIs that save to `candidate_sources` even when validation reports warnings or failures.
 - Source-type ingestion dispatch (`rss`, `scraper`, `api`) with RSS fully implemented.
 - Default source seeding script for `bbc-amharic`.
 - RSS ingestion for configured active feed sources.
@@ -89,38 +95,52 @@ zenadam/
    ```bash
    npm run dev
    ```
-4. Seed the default source:
+4. In a second terminal, install admin dependencies:
    ```bash
+   cd admin
+   npm install
+   ```
+5. Start the admin UI:
+   ```bash
+   npm run dev
+   ```
+6. Seed the default source:
+   ```bash
+   cd ../backend
    npm run seed:sources
    ```
-5. Run one ingestion pass:
+7. Run one ingestion pass:
    ```bash
    npm run ingest:rss
    ```
-6. Build stories from ingested items:
+8. Build stories from ingested items:
    ```bash
    npm run pipeline
    ```
-7. Audit active sources:
+9. Audit active sources:
    ```bash
    npm run audit:sources
    ```
-8. Dry-run prune failed sources:
+10. Dry-run prune failed sources:
    ```bash
    npm run prune:sources
    ```
-9. Dry-run story reconciliation:
+11. Dry-run story reconciliation:
    ```bash
    npm run reconcile:stories
    ```
-10. Check health:
+12. Check health:
    ```bash
    curl http://localhost:3000/api/v1/health
    ```
-11. Fetch feed stories:
+13. Fetch feed stories:
    ```bash
    curl 'http://localhost:3000/api/v1/feed?limit=10'
    ```
+14. Open the admin UI:
+    ```bash
+    http://localhost:3001/sources
+    ```
 
 ## Operational docs
 

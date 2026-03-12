@@ -8,7 +8,11 @@ const sampleRssXml = `<?xml version="1.0"?>
 
 test('admin validate returns valid result for good source input', async () => {
   const service = createAdminSourceService({
+    fetch: async () => ({ ok: true }),
     fetchFeedXml: async () => ({ xml: sampleRssXml, notModified: false }),
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null,
     detectLanguage: () => 'en'
   });
 
@@ -27,9 +31,13 @@ test('admin validate returns valid result for good source input', async () => {
 
 test('admin validate returns invalid result for bad source input', async () => {
   const service = createAdminSourceService({
+    fetch: async () => ({ ok: false, status: 503 }),
     fetchFeedXml: async () => {
       throw new Error('RSS fetch failed (404) for https://example.com/feed.xml');
     },
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null,
     findSourceByBaseUrl: async () => null,
     findSourceByEntryUrl: async () => null,
     findSourceBySlug: async () => null
@@ -49,9 +57,13 @@ test('admin validate returns invalid result for bad source input', async () => {
 
 test('admin create rejects invalid source input', async () => {
   const service = createAdminSourceService({
+    fetch: async () => ({ ok: true }),
     fetchFeedXml: async () => {
       throw new Error('RSS fetch failed (404) for https://example.com/feed.xml');
-    }
+    },
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null
   });
 
   await assert.rejects(
@@ -69,8 +81,12 @@ test('admin create rejects invalid source input', async () => {
 
 test('admin create rejects duplicate slug', async () => {
   const service = createAdminSourceService({
+    fetch: async () => ({ ok: true }),
     fetchFeedXml: async () => ({ xml: sampleRssXml, notModified: false }),
     detectLanguage: () => 'en',
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null,
     findSourceBySlug: async () => ({ _id: 'existing-source', slug: 'duplicate-source' }),
     findSourceByBaseUrl: async () => null,
     findSourceByEntryUrl: async () => null
@@ -103,11 +119,15 @@ test('admin update revalidates relevant changes', async () => {
       language: 'en',
       status: 'active'
     }),
+    fetch: async () => ({ ok: true }),
     fetchFeedXml: async (feedUrl) => {
       validatedFeedUrl = feedUrl;
       return { xml: sampleRssXml, notModified: false };
     },
     detectLanguage: () => 'en',
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null,
     findSourceByBaseUrl: async () => null,
     findSourceByEntryUrl: async () => null,
     findSourceBySlug: async () => null,
@@ -128,4 +148,37 @@ test('admin update revalidates relevant changes', async () => {
 
   assert.equal(validatedFeedUrl, 'https://example.com/new.xml');
   assert.equal(updated.feedUrl, 'https://example.com/new.xml');
+});
+
+test('admin candidate create saves even when validation fails', async () => {
+  const service = createAdminSourceService({
+    createCandidateSource: async (source) => ({
+      _id: 'candidate-1',
+      ...source,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z')
+    }),
+    fetch: async () => ({ ok: false, status: 503 }),
+    fetchFeedXml: async () => {
+      throw new Error('RSS fetch failed (404) for https://example.com/feed.xml');
+    },
+    findCandidateSourceByBaseUrl: async () => null,
+    findCandidateSourceByEntryUrl: async () => null,
+    findCandidateSourceBySlug: async () => null,
+    findSourceByBaseUrl: async () => null,
+    findSourceByEntryUrl: async () => null,
+    findSourceBySlug: async () => null
+  });
+
+  const created = await service.createAdminCandidateSource({
+    slug: 'candidate-source',
+    name: 'Candidate Source',
+    type: 'rss',
+    baseUrl: 'https://example.com',
+    feedUrl: 'https://example.com/feed.xml'
+  });
+
+  assert.equal(created.sourceSet, 'candidate_sources');
+  assert.equal(created.isCandidate, true);
+  assert.equal(created.validationStatus, 'invalid');
 });

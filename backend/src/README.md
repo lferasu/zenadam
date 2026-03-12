@@ -166,12 +166,19 @@ Optional query param:
 
 Admin source registry list endpoint.
 
+Returns a combined admin view over:
+
+- active/inactive documents from `sources`
+- editable candidate documents from `candidate_sources`
+
 Useful response fields include:
 
 - `id`, `slug`, `name`, `type`
 - `baseUrl`, `feedUrl`, `language`
 - `isActive`
+- `isCandidate`, `isEditable`, `sourceSet`
 - `validationStatus`, `lastValidatedAt`, `lastValidationMessage`
+- `validationResults`
 - `createdAt`, `updatedAt`
 
 ### GET `/admin/sources/:sourceId`
@@ -184,12 +191,31 @@ Validates a candidate source definition without saving it.
 
 Validation flow:
 
-- RSS/API sources: validate URL, fetch, parse, and confirm at least one item exists
+- RSS/API sources: validate homepage reachability, fetch feed, parse, and confirm at least one item exists
 - Scraper sources: validate URL, fetch page, confirm readable HTML for MVP
+
+Validation is informational. Candidate-source saves do not block on invalid feeds or temporary network failures.
+
+### POST `/admin/candidate-sources`
+
+Creates a new candidate source in `candidate_sources`.
+
+Server behavior:
+
+- validates required fields
+- runs informational validation
+- persists the candidate even if validation reports issues
+- stores the validation snapshot for the admin UI
+
+### PUT `/admin/candidate-sources/:sourceId`
+
+Updates an existing candidate source in `candidate_sources`.
+
+`PATCH` is also accepted for the same route.
 
 ### POST `/admin/sources`
 
-Creates a new source after server-side validation.
+Creates a new active source after server-side validation.
 
 ### PATCH `/admin/sources/:sourceId`
 

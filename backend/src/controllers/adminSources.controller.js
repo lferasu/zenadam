@@ -1,7 +1,9 @@
 import {
+  createAdminCandidateSource,
   createAdminSource,
   getAdminSourceById,
   listAdminSources,
+  updateAdminCandidateSource,
   updateAdminSource,
   validateCandidateSource
 } from '../services/adminSourceService.js';
@@ -21,9 +23,11 @@ const parseOptionalPositiveInt = (raw, defaultValue, maximum = 1000) => {
 
 export const createAdminSourcesHandlers = (deps = {}) => {
   const resolved = {
+    createAdminCandidateSource: deps.createAdminCandidateSource ?? createAdminCandidateSource,
     createAdminSource: deps.createAdminSource ?? createAdminSource,
     getAdminSourceById: deps.getAdminSourceById ?? getAdminSourceById,
     listAdminSources: deps.listAdminSources ?? listAdminSources,
+    updateAdminCandidateSource: deps.updateAdminCandidateSource ?? updateAdminCandidateSource,
     updateAdminSource: deps.updateAdminSource ?? updateAdminSource,
     validateCandidateSource: deps.validateCandidateSource ?? validateCandidateSource
   };
@@ -86,9 +90,38 @@ export const createAdminSourcesHandlers = (deps = {}) => {
         next(error);
       }
     },
+    createCandidateSource: async (req, res, next) => {
+      try {
+        const source = await resolved.createAdminCandidateSource(req.body ?? {});
+
+        res.status(201).json({
+          data: source,
+          meta: { requestId: req.requestId },
+          error: null
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
     updateSource: async (req, res, next) => {
       try {
         const source = await resolved.updateAdminSource({
+          id: req.params.sourceId,
+          input: req.body ?? {}
+        });
+
+        res.json({
+          data: source,
+          meta: { requestId: req.requestId },
+          error: null
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+    updateCandidateSource: async (req, res, next) => {
+      try {
+        const source = await resolved.updateAdminCandidateSource({
           id: req.params.sourceId,
           input: req.body ?? {}
         });
@@ -105,4 +138,12 @@ export const createAdminSourcesHandlers = (deps = {}) => {
   };
 };
 
-export const { listSources, getSourceById, validateSource, createSource, updateSource } = createAdminSourcesHandlers();
+export const {
+  listSources,
+  getSourceById,
+  validateSource,
+  createSource,
+  createCandidateSource,
+  updateSource,
+  updateCandidateSource
+} = createAdminSourcesHandlers();
