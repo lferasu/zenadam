@@ -180,11 +180,11 @@ export const mapInspectionStoryListItem = (story) => ({
   }))
 });
 
-export const getFeedStories = async ({ limit = 25, sort } = {}) => {
+export const getFeedStories = async ({ limit = 25, skip = 0, sort, query } = {}) => {
   await ensureRuntimeInitialized();
   const normalizedSort = normalizeStorySort(sort);
 
-  const stories = await listStoriesForConsumer({ limit, sort: normalizedSort });
+  const stories = await listStoriesForConsumer({ limit, skip, sort: normalizedSort, query });
 
   return stories.map((story) => {
     const mapped = mapConsumerStoryListItem(story);
@@ -195,18 +195,22 @@ export const getFeedStories = async ({ limit = 25, sort } = {}) => {
   });
 };
 
-export const getConsumerStories = async ({ limit = 25, sort } = {}) => {
+export const getConsumerStories = async ({ limit = 25, skip = 0, sort, query } = {}) => {
   await ensureRuntimeInitialized();
   const normalizedSort = normalizeStorySort(sort);
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
 
-  const items = await listStoriesForConsumer({ limit, sort: normalizedSort });
+  const items = await listStoriesForConsumer({ limit, skip, sort: normalizedSort, query: normalizedQuery });
 
   return {
     items: items.map(mapConsumerStoryListItem),
     pagination: {
       limit,
+      skip,
       count: items.length,
-      sort: normalizedSort
+      hasMore: items.length === limit,
+      sort: normalizedSort,
+      ...(normalizedQuery ? { query: normalizedQuery } : {})
     }
   };
 };

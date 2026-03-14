@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: var(--ui-canvas);
+  --color-surface: var(--ui-surface);
+  --color-surface-strong: var(--ui-surface-strong);
+  --color-card: var(--ui-card);
+  --color-line: var(--ui-line);
+  --color-accent: var(--ui-accent);
+  --color-accent-contrast: var(--ui-accent-contrast);
+  --color-text: var(--ui-text);
+  --color-text-muted: var(--ui-text-muted);
+  --color-success: var(--ui-success);
+  --color-warning: var(--ui-warning);
+}
+
+:root {
+  color-scheme: light;
+  --ui-canvas: #eef3f8;
+  --ui-surface: rgba(255, 255, 255, 0.76);
+  --ui-surface-strong: #f7fafc;
+  --ui-card: #ffffff;
+  --ui-line: rgba(15, 23, 42, 0.12);
+  --ui-accent: #2563eb;
+  --ui-accent-contrast: #eff6ff;
+  --ui-success: #16a34a;
+  --ui-warning: #ea580c;
+  --ui-text: #0f172a;
+  --ui-text-muted: #475569;
+  --ui-page-bg:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 24%),
+    radial-gradient(circle at 82% 20%, rgba(14, 165, 233, 0.06), transparent 18%),
+    linear-gradient(180deg, #eef3f8 0%, #e6edf5 100%);
+  --ui-shadow-soft: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --ui-shadow-panel: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--ui-page-bg);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.24;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 85%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ui-accent) 24%, transparent);
+}
+
+.shell-panel {
+  border: 1px solid color-mix(in srgb, var(--color-line) 100%, transparent);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-panel);
+  backdrop-filter: blur(18px);
+}
+
+.card-surface {
+  border: 1px solid color-mix(in srgb, var(--color-line) 100%, transparent);
+  background: var(--color-card);
+  box-shadow: var(--ui-shadow-soft);
+}
+
+.feed-surface {
+  border-top: 1px solid color-mix(in srgb, var(--color-line) 88%, transparent);
+  background: color-mix(in srgb, var(--color-card) 76%, transparent);
+}
+
+.feed-separator {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 88%, transparent);
+}
+
+.soft-surface {
+  border: 1px solid color-mix(in srgb, var(--color-line) 100%, transparent);
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+}
+
+.input-surface {
+  border: 1px solid color-mix(in srgb, var(--color-line) 95%, transparent);
+  background: color-mix(in srgb, var(--color-surface-strong) 94%, white 6%);
+}
+
+.input-surface::placeholder {
+  transition: color 140ms ease, opacity 140ms ease;
+}
+
+.input-surface:focus::placeholder {
+  color: transparent;
+  opacity: 0;
+}

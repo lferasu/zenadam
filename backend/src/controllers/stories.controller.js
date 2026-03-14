@@ -61,8 +61,22 @@ export const createStoriesHandlers = (deps = {}) => {
           errorCode: 'INVALID_LIMIT',
           errorMessage: 'limit must be an integer between 1 and 100'
         });
+        const skip = parsePositiveInt({
+          raw: req.query.skip,
+          defaultValue: 0,
+          minimum: 0,
+          maximum: 10_000,
+          errorCode: 'INVALID_SKIP',
+          errorMessage: 'skip must be an integer between 0 and 10000'
+        });
 
-        const stories = await resolved.getConsumerStories({ limit, sort: req.query.sort });
+        const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+        const stories = await resolved.getConsumerStories({
+          limit,
+          skip,
+          sort: req.query.sort,
+          ...(query ? { query } : {})
+        });
 
         res.json({
           data: stories.items,

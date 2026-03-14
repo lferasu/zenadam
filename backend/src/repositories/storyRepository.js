@@ -13,6 +13,7 @@ const getCollection = async () => {
 
 const toObjectId = (value) => (value instanceof ObjectId ? value : new ObjectId(value));
 const mergeStoryTopicSignature = (current, incoming) => mergeTopicSignatures(current, incoming);
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const toPersistedRanking = (ranking) => {
   if (!ranking) {
     return null;
@@ -395,11 +396,12 @@ export const findStoryForRanking = async ({ storyId }) => {
   return story ?? null;
 };
 
-export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'relevant' } = {}) => {
+export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'relevant', query } = {}) => {
   const collection = await getCollection();
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  const searchRegex = normalizedQuery ? new RegExp(escapeRegex(normalizedQuery), 'i') : null;
 
-  return collection
-    .aggregate([
+  const pipeline = [
       { $match: { status: STORY_STATUS.ACTIVE } },
       {
         $addFields: {
@@ -409,10 +411,11 @@ export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'rel
           sortLatestAtComputed: { $ifNull: ['$ranking.sortLatestAt', { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] }] },
           storyScoreComputed: { $ifNull: ['$ranking.storyScore', 0] }
         }
-      },
-      { $sort: buildConsumerStorySort(sort) },
-      { $skip: skip },
-      { $limit: limit },
+      }
+  ];
+
+  if (searchRegex) {
+    pipeline.push(
       {
         $lookup: {
           from: NORMALIZED_ITEM_COLLECTION,
@@ -420,7 +423,7 @@ export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'rel
           pipeline: [
             { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
             { $sort: { publishedAt: -1, createdAt: -1 } },
-            { $limit: 3 },
+            { $limit: 8 },
             {
               $lookup: {
                 from: SOURCE_COLLECTION,
@@ -432,33 +435,82 @@ export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'rel
             {
               $project: {
                 _id: 0,
+                title: { $ifNull: ['$normalizedTitle', '$title'] },
                 sourceName: {
                   $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
                 }
               }
             }
           ],
-          as: 'sourcePreview'
+          as: 'searchPreview'
         }
       },
       {
-        $project: {
-          _id: 1,
-          title: 1,
-          summary: 1,
-          storyTitle: 1,
-          storySummary: 1,
-          heroImage: 1,
-          ranking: 1,
-          sourceCount: '$sourceCountComputed',
-          articleCount: '$articleCountComputed',
-          latestPublishedAt: 1,
-          updatedAt: 1,
-          sourcePreview: 1
+        $match: {
+          $or: [
+            { storyTitle: searchRegex },
+            { title: searchRegex },
+            { storySummary: searchRegex },
+            { summary: searchRegex },
+            { 'searchPreview.title': searchRegex },
+            { 'searchPreview.sourceName': searchRegex }
+          ]
         }
       }
-    ])
-    .toArray();
+    );
+  }
+
+  pipeline.push(
+    { $sort: buildConsumerStorySort(sort) },
+    { $skip: skip },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: NORMALIZED_ITEM_COLLECTION,
+        let: { itemIds: '$itemIds' },
+        pipeline: [
+          { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+          { $sort: { publishedAt: -1, createdAt: -1 } },
+          { $limit: 3 },
+          {
+            $lookup: {
+              from: SOURCE_COLLECTION,
+              localField: 'sourceId',
+              foreignField: '_id',
+              as: 'source'
+            }
+          },
+          {
+            $project: {
+              _id: 0,
+              sourceName: {
+                $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
+              }
+            }
+          }
+        ],
+        as: 'sourcePreview'
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        summary: 1,
+        storyTitle: 1,
+        storySummary: 1,
+        heroImage: 1,
+        ranking: 1,
+        sourceCount: '$sourceCountComputed',
+        articleCount: '$articleCountComputed',
+        latestPublishedAt: 1,
+        updatedAt: 1,
+        sourcePreview: 1
+      }
+    }
+  );
+
+  return collection.aggregate(pipeline).toArray();
 };
 
 export const findStoryForConsumerById = async ({ id }) => {

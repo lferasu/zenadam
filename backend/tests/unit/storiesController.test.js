@@ -63,7 +63,7 @@ test('GET stories returns story list successfully', async () => {
   });
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(receivedArgs, { limit: 25, sort: 'latest' });
+  assert.deepEqual(receivedArgs, { limit: 25, skip: 0, sort: 'latest' });
   assert.deepEqual(res.body, {
     data: [
       {
@@ -100,6 +100,44 @@ test('GET stories returns story list successfully', async () => {
     },
     error: null
   });
+});
+
+test('GET stories forwards search query when provided', async () => {
+  let receivedArgs = null;
+  const handlers = createStoriesHandlers({
+    getConsumerStories: async (args) => {
+      receivedArgs = args;
+      return { items: [], pagination: { limit: 25, count: 0, sort: 'relevant', query: 'ethiopia' } };
+    }
+  });
+
+  const req = { query: { q: '  ethiopia  ' }, requestId: 'req-search' };
+  const res = createResponse();
+  await handlers.getStories(req, res, (error) => {
+    throw error;
+  });
+
+  assert.deepEqual(receivedArgs, { limit: 25, skip: 0, sort: undefined, query: 'ethiopia' });
+  assert.equal(res.body.meta.pagination.query, 'ethiopia');
+});
+
+test('GET stories forwards skip for pagination', async () => {
+  let receivedArgs = null;
+  const handlers = createStoriesHandlers({
+    getConsumerStories: async (args) => {
+      receivedArgs = args;
+      return { items: [], pagination: { limit: 12, skip: 12, count: 0, hasMore: false, sort: 'relevant' } };
+    }
+  });
+
+  const req = { query: { limit: '12', skip: '12' }, requestId: 'req-skip' };
+  const res = createResponse();
+  await handlers.getStories(req, res, (error) => {
+    throw error;
+  });
+
+  assert.deepEqual(receivedArgs, { limit: 12, skip: 12, sort: undefined });
+  assert.equal(res.body.meta.pagination.skip, 12);
 });
 
 test('GET story by id returns one story', async () => {
