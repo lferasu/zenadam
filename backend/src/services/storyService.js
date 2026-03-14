@@ -1,11 +1,9 @@
 import { ObjectId } from 'mongodb';
-import { STORY_STATUS } from '../models/Story.js';
 import { findUnclusteredNormalizedItems, markNormalizedItemsClustered } from '../repositories/normalizedItemRepository.js';
 import {
   findStoryForConsumerById,
   findStoryForInspectionById,
   listConsumerStoryArticles,
-  listActiveStories,
   listStoriesForConsumer,
   listStoriesForInspection,
   upsertStoryByClusterKey
@@ -14,6 +12,7 @@ import { ensureRuntimeInitialized } from './runtimeService.js';
 import { clusterNormalizedItems } from '../clustering/storyClusterer.js';
 import { env } from '../config/env.js';
 import { clusterArticleIncrementally } from './incrementalClusteringService.js';
+import { normalizeStorySort, rankStoryItemsForResponse } from '../ranking/storyRankingService.js';
 
 const wait = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -85,11 +84,51 @@ export const generateStoriesFromLegacyClusterKeys = async ({ limit = 250 } = {})
 };
 
 const toIso = (value) => (value?.toISOString?.() ? value.toISOString() : null);
+const mapImage = (image) => {
+  if (!image?.url) {
+    return null;
+  }
+
+  return {
+    url: image.url,
+    ...(image.source ? { source: image.source } : {}),
+    ...(image.sourceItemId ? { sourceItemId: String(image.sourceItemId) } : {}),
+    ...(image.selectionReason ? { selectionReason: image.selectionReason } : {}),
+    ...(image.width ? { width: image.width } : {}),
+    ...(image.height ? { height: image.height } : {}),
+    ...(image.status ? { status: image.status } : {}),
+    ...(image.updatedAt ? { updatedAt: toIso(image.updatedAt) } : {})
+  };
+};
+
+const mapStoryRanking = (ranking) => {
+  if (!ranking) {
+    return null;
+  }
+
+  return {
+    storyScore: Number(ranking.storyScore ?? 0),
+    sortLatestAt: toIso(ranking.sortLatestAt),
+    strategyVersion: ranking.strategyVersion ?? null,
+    lastRankedAt: toIso(ranking.lastRankedAt),
+    signals: ranking.signals
+      ? {
+          recencyScore: Number(ranking.signals.recencyScore ?? 0),
+          sourceRankScore: Number(ranking.signals.sourceRankScore ?? 0),
+          popularityScore: Number(ranking.signals.popularityScore ?? 0),
+          diversityScore: Number(ranking.signals.diversityScore ?? 0),
+          velocityScore: Number(ranking.signals.velocityScore ?? 0)
+        }
+      : null
+  };
+};
 
 export const mapConsumerStoryListItem = (story) => ({
   id: String(story._id),
   title: story.storyTitle ?? story.title,
   summary: story.storySummary ?? story.summary ?? null,
+  heroImage: mapImage(story.heroImage),
+  ranking: mapStoryRanking(story.ranking),
   sourceCount: story.sourceCount ?? 0,
   latestPublishedAt: toIso(story.latestPublishedAt),
   updatedAt: toIso(story.updatedAt),
@@ -102,16 +141,21 @@ export const mapConsumerStoryArticle = (article) => ({
   title: article.title,
   summary: article.summary ?? null,
   snippet: article.snippet ?? null,
+  image: mapImage(article.image),
   sourceName: article.sourceName ?? null,
   publishedAt: toIso(article.publishedAt),
   canonicalUrl: article.canonicalUrl ?? null,
-  targetLanguage: article.targetLanguage ?? null
+  targetLanguage: article.targetLanguage ?? null,
+  storyItemScore: article.storyItemRanking?.storyItemScore ?? null,
+  isPrimary: article.storyItemRanking?.isPrimary ?? false
 });
 
 export const mapConsumerStoryDetail = (story) => ({
   id: String(story._id),
   title: story.storyTitle ?? story.title,
   summary: story.storySummary ?? story.summary ?? null,
+  heroImage: mapImage(story.heroImage),
+  ranking: mapStoryRanking(story.ranking),
   sourceCount: story.sourceCount ?? 0,
   articleCount: story.articleCount ?? 0,
   latestPublishedAt: toIso(story.latestPublishedAt),
@@ -123,37 +167,46 @@ export const mapInspectionStoryListItem = (story) => ({
   id: String(story._id),
   title: story.storyTitle ?? story.title,
   summary: story.storySummary ?? story.summary ?? null,
+  heroImage: mapImage(story.heroImage),
+  ranking: mapStoryRanking(story.ranking),
   articleCount: story.articleCount ?? 0,
   latestArticleAt: toIso(story.latestArticleAt ?? story.updatedAt),
   createdAt: toIso(story.createdAt),
   previewArticles: (story.previewArticles ?? []).map((article) => ({
     title: article.title,
+    image: mapImage(article.image),
     source: article.source ?? null,
     publishedAt: toIso(article.publishedAt)
   }))
 });
 
-export const getFeedStories = async ({ limit = 25 } = {}) => {
+export const getFeedStories = async ({ limit = 25, sort } = {}) => {
   await ensureRuntimeInitialized();
+  const normalizedSort = normalizeStorySort(sort);
 
-  const stories = await listStoriesForConsumer({ limit });
+  const stories = await listStoriesForConsumer({ limit, sort: normalizedSort });
 
-  return stories.map((story) => ({
-    ...mapConsumerStoryListItem(story),
-    heroImageUrl: null
-  }));
+  return stories.map((story) => {
+    const mapped = mapConsumerStoryListItem(story);
+    return {
+      ...mapped,
+      heroImageUrl: mapped.heroImage?.url ?? null
+    };
+  });
 };
 
-export const getConsumerStories = async ({ limit = 25 } = {}) => {
+export const getConsumerStories = async ({ limit = 25, sort } = {}) => {
   await ensureRuntimeInitialized();
+  const normalizedSort = normalizeStorySort(sort);
 
-  const items = await listStoriesForConsumer({ limit });
+  const items = await listStoriesForConsumer({ limit, sort: normalizedSort });
 
   return {
     items: items.map(mapConsumerStoryListItem),
     pagination: {
       limit,
-      count: items.length
+      count: items.length,
+      sort: normalizedSort
     }
   };
 };
@@ -176,7 +229,15 @@ export const getConsumerStoryById = async ({ id }) => {
     throw error;
   }
 
-  return mapConsumerStoryDetail(story);
+  const rankedArticles = rankStoryItemsForResponse({
+    story,
+    items: await listConsumerStoryArticles({ storyId: id })
+  });
+
+  return mapConsumerStoryDetail({
+    ...story,
+    articlePreviews: rankedArticles.slice(0, 5)
+  });
 };
 
 export const getConsumerStoryArticles = async ({ storyId }) => {
@@ -205,11 +266,16 @@ export const getConsumerStoryArticles = async ({ storyId }) => {
     throw error;
   }
 
+  const rankedArticles = rankStoryItemsForResponse({
+    story,
+    items: articles
+  });
+
   return {
     storyId,
     title: story.storyTitle ?? story.title,
-    articleCount: articles.length,
-    articles: articles.map(mapConsumerStoryArticle)
+    articleCount: rankedArticles.length,
+    articles: rankedArticles.map(mapConsumerStoryArticle)
   };
 };
 
@@ -243,6 +309,7 @@ export const mapInspectionStoryArticle = (article, includeDebug) => {
     source: article.sourceName ?? null,
     sourceType: article.sourceType ?? null,
     title: article.title,
+    image: mapImage(article.image),
     url: article.canonicalUrl ?? null,
     publishedAt: toIso(article.publishedAt),
     language: article.language ?? null,
@@ -282,6 +349,8 @@ export const getStoryForInspectionById = async ({ id, debug = false }) => {
     id: String(story._id),
     title: story.storyTitle ?? story.title,
     summary: story.storySummary ?? story.summary ?? null,
+    heroImage: mapImage(story.heroImage),
+    ranking: mapStoryRanking(story.ranking),
     createdAt: toIso(story.createdAt),
     updatedAt: toIso(story.updatedAt),
     articleCount: story.articleCount ?? 0,

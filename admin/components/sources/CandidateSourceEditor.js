@@ -11,7 +11,10 @@ const toFormState = (source) => ({
   feedUrl: source.feedUrl ?? '',
   name: source.name ?? '',
   language: source.language ?? '',
-  type: source.type ?? 'rss'
+  type: source.type ?? 'rss',
+  sourceQualityScore:
+    source.sourceQuality?.score !== undefined && source.sourceQuality?.score !== null ? String(source.sourceQuality.score) : '',
+  sourceQualityRationale: source.sourceQuality?.rationale ?? ''
 });
 
 export function CandidateSourceEditor({ source, onSaved }) {

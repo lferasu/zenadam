@@ -71,6 +71,7 @@ export const buildSourceItemEnrichment = async (item, { targetLanguage, deps = {
   const normalizedItem = {
     sourceItemId: item._id,
     sourceId: item.sourceId,
+    ...(item.image?.url ? { image: item.image } : {}),
     canonicalUrl: item.url ?? null,
     sourceLanguage,
     targetLanguage,

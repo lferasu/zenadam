@@ -34,6 +34,22 @@ const request = async (path, options = {}) => {
 };
 
 export const listSources = async () => request('admin/sources');
+export const listStories = async (params = {}) => {
+  const searchParams = new globalThis.URLSearchParams();
+
+  if (params.limit) {
+    searchParams.set('limit', String(params.limit));
+  }
+
+  if (params.sort) {
+    searchParams.set('sort', String(params.sort));
+  }
+
+  const path = searchParams.size ? `stories?${searchParams.toString()}` : 'stories';
+  return request(path);
+};
+
+export const getStoryArticles = async (storyId) => request(`stories/${storyId}/articles`);
 
 export const validateSource = async (payload) =>
   request('admin/sources/validate', {
@@ -50,5 +66,11 @@ export const createCandidateSource = async (payload) =>
 export const updateCandidateSource = async (id, payload) =>
   request(`admin/candidate-sources/${id}`, {
     method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+
+export const updateSource = async (id, payload) =>
+  request(`admin/sources/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify(payload)
   });

@@ -62,7 +62,7 @@ export const createStoriesHandlers = (deps = {}) => {
           errorMessage: 'limit must be an integer between 1 and 100'
         });
 
-        const stories = await resolved.getConsumerStories({ limit });
+        const stories = await resolved.getConsumerStories({ limit, sort: req.query.sort });
 
         res.json({
           data: stories.items,

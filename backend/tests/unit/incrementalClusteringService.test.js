@@ -315,6 +315,14 @@ test('clusterArticleIncrementally attaches to story using vector candidates', as
     refreshStorySummary: async () => {
       order.push('refresh');
       return { refreshed: true };
+    },
+    refreshStoryHeroImage: async () => {
+      order.push('hero');
+      return { url: 'https://example.com/hero.jpg' };
+    },
+    refreshStoryRanking: async () => {
+      order.push('ranking');
+      return { refreshed: true };
     }
   });
 
@@ -339,7 +347,7 @@ test('clusterArticleIncrementally attaches to story using vector candidates', as
   assert.equal(calls.attach, 1);
   assert.equal(calls.create, 0);
   assert.equal(calls.fallback, 0);
-  assert.deepEqual(order, ['attach', 'mark', 'refresh']);
+  assert.deepEqual(order, ['attach', 'mark', 'refresh', 'hero', 'ranking']);
 });
 
 test('clusterArticleIncrementally falls back to scan when vector lookup fails', async () => {
@@ -387,6 +395,14 @@ test('clusterArticleIncrementally falls back to scan when vector lookup fails', 
     refreshStorySummary: async () => {
       order.push('refresh');
       return { refreshed: true };
+    },
+    refreshStoryHeroImage: async () => {
+      order.push('hero');
+      return { url: 'https://example.com/hero.jpg' };
+    },
+    refreshStoryRanking: async () => {
+      order.push('ranking');
+      return { refreshed: true };
     }
   });
 
@@ -410,7 +426,7 @@ test('clusterArticleIncrementally falls back to scan when vector lookup fails', 
   assert.equal(result.action, 'created');
   assert.equal(calls.fallback, 1);
   assert.equal(calls.created, 1);
-  assert.deepEqual(order, ['create', 'mark', 'refresh']);
+  assert.deepEqual(order, ['create', 'mark', 'refresh', 'hero', 'ranking']);
 });
 
 test('clusterArticleIncrementally falls back to scan when vector lookup returns no candidates', async () => {
@@ -462,7 +478,9 @@ test('clusterArticleIncrementally falls back to scan when vector lookup returns 
     buildArticleEmbedding: () => 'title detailed-summary',
     cosineSimilarity: () => 0.9,
     generateEmbedding: async () => [0.2, 0.3],
-    refreshStorySummary: async () => ({ refreshed: true })
+    refreshStorySummary: async () => ({ refreshed: true }),
+    refreshStoryHeroImage: async () => ({ url: 'https://example.com/hero.jpg' }),
+    refreshStoryRanking: async () => ({ refreshed: true })
   });
 
   const result = await cluster({

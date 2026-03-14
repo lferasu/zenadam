@@ -3,7 +3,7 @@ import { getFeedStories } from '../services/storyService.js';
 export const getFeed = async (req, res, next) => {
   try {
     const limit = Number(req.query.limit ?? 25);
-    const stories = await getFeedStories({ limit: Number.isNaN(limit) ? 25 : limit });
+    const stories = await getFeedStories({ limit: Number.isNaN(limit) ? 25 : limit, sort: req.query.sort });
 
     res.json({ stories });
   } catch (error) {

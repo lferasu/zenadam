@@ -48,6 +48,16 @@ export const upsertNormalizedItem = async (item) => {
     updatedAt: now
   };
 
+  if (item.image?.url) {
+    setPayload.image = {
+      url: item.image.url,
+      source: item.image.source,
+      ...(item.image.width ? { width: item.image.width } : {}),
+      ...(item.image.height ? { height: item.image.height } : {}),
+      ...(item.image.status ? { status: item.image.status } : {})
+    };
+  }
+
   if (Array.isArray(item.embedding) && item.embedding.length) {
     setPayload.embedding = item.embedding;
     setPayload.embeddingModel = item.embeddingModel ?? null;
@@ -79,6 +89,26 @@ export const upsertNormalizedItem = async (item) => {
   );
 
   return result;
+};
+
+export const listStoryImageCandidates = async (storyId) => {
+  const collection = await getCollection();
+
+  return collection
+    .find(
+      { storyId: toObjectId(storyId), 'image.url': { $exists: true, $ne: '' } },
+      {
+        projection: {
+          _id: 1,
+          sourceItemId: 1,
+          image: 1,
+          publishedAt: 1,
+          updatedAt: 1,
+          createdAt: 1
+        }
+      }
+    )
+    .toArray();
 };
 
 export const findUnclusteredNormalizedItems = async (limit = 250) => {

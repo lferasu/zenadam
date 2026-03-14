@@ -11,7 +11,9 @@ import {
 } from '../repositories/normalizedItemRepository.js';
 import { attachArticleToStory, createStoryFromArticle } from '../repositories/storyRepository.js';
 import { buildArticleEmbedding, cosineSimilarity, generateEmbedding } from './embeddingService.js';
+import { refreshStoryHeroImage } from './storyImageService.js';
 import { refreshStorySummary } from './storyEnrichmentService.js';
+import { refreshStoryRanking } from '../ranking/storyRankingService.js';
 
 export { evaluateStoryCandidates, selectClusteringAction };
 
@@ -74,6 +76,8 @@ const attachToExistingStory = async ({ article, bestStory, lookupMethod, deps })
 
   if (updatedStory?._id) {
     await deps.refreshStorySummary({ storyId: updatedStory._id });
+    await deps.refreshStoryHeroImage({ storyId: updatedStory._id });
+    await deps.refreshStoryRanking({ storyId: updatedStory._id });
   }
 
   logger.info('Attached article to existing story', {
@@ -103,6 +107,8 @@ const createNewStory = async ({ article, bestStory, lookupMethod, deps }) => {
 
   if (story?._id) {
     await deps.refreshStorySummary({ storyId: story._id });
+    await deps.refreshStoryHeroImage({ storyId: story._id });
+    await deps.refreshStoryRanking({ storyId: story._id });
   }
 
   logger.info('Created new story from article', {
@@ -127,7 +133,9 @@ export const createIncrementalClusteringRunner = (overrides = {}) => {
     buildArticleEmbedding: overrides.buildArticleEmbedding ?? buildArticleEmbedding,
     cosineSimilarity: overrides.cosineSimilarity ?? cosineSimilarity,
     generateEmbedding: overrides.generateEmbedding ?? generateEmbedding,
-    refreshStorySummary: overrides.refreshStorySummary ?? refreshStorySummary
+    refreshStorySummary: overrides.refreshStorySummary ?? refreshStorySummary,
+    refreshStoryHeroImage: overrides.refreshStoryHeroImage ?? refreshStoryHeroImage,
+    refreshStoryRanking: overrides.refreshStoryRanking ?? refreshStoryRanking
   };
 
   const candidateRetrieval = createCandidateRetrieval({

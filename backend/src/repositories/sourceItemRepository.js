@@ -36,6 +36,16 @@ export const upsertSourceItem = async (item) => {
     }
   };
 
+  if (item.image?.url) {
+    updatePayload.$set.image = {
+      url: item.image.url,
+      source: item.image.source,
+      ...(item.image.width ? { width: item.image.width } : {}),
+      ...(item.image.height ? { height: item.image.height } : {}),
+      status: item.image.status ?? 'found'
+    };
+  }
+
   try {
     const result = await collection.updateOne({ sourceId, externalId }, updatePayload, { upsert: true });
     return { inserted: result.upsertedCount > 0 };

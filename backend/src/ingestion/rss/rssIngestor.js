@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { logger } from '../../config/logger.js';
 import { upsertSourceItem } from '../../repositories/sourceItemRepository.js';
+import { extractImageFromRssEntry } from './rssImageExtractor.js';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -141,6 +142,7 @@ const mapEntryToSourceItem = (source, entry) => {
   const title = cleanupTitle(entry?.title ?? '', normalizationConfig.titleCleanupRules);
   const publishedAt = resolvePublishedAt(entry, parserConfig.preferredDateField);
   const content = resolveContent(entry, parserConfig.preferredContentField);
+  const image = extractImageFromRssEntry(entry);
   const rawText = normalizeText(content, {
     stripHtml: Boolean(normalizationConfig.stripHtml),
     summaryMaxLength: normalizationConfig.summaryMaxLength
@@ -151,6 +153,7 @@ const mapEntryToSourceItem = (source, entry) => {
     externalId: externalId ? String(externalId) : '',
     url,
     title,
+    ...(image ? { image: { ...image, status: 'found' } } : {}),
     rawPayload: entry,
     rawText,
     publishedAt,

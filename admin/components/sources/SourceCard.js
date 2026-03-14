@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CandidateSourceEditor } from './CandidateSourceEditor';
+import { SourceQualityEditor } from './SourceQualityEditor';
 import { ValidationBadge } from './ValidationBadge';
 import { ValidationResultsPanel } from './ValidationResultsPanel';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -13,6 +14,11 @@ const DetailRow = ({ label, value }) => (
     <p className="mt-1 text-sm text-text">{value || 'Not provided'}</p>
   </div>
 );
+
+const formatQualityScore = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : 'Not set';
+};
 
 export function SourceCard({ source, onCandidateSaved }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,6 +36,11 @@ export function SourceCard({ source, onCandidateSaved }) {
               {source.isCandidate ? 'Candidate' : source.isActive ? 'Active' : 'Inactive'}
             </StatusPill>
             <ValidationBadge status={source.validationStatus} />
+            {source.sourceQuality?.tier ? (
+              <StatusPill tone={source.sourceQuality.tier === 'high' ? 'active' : source.sourceQuality.tier === 'medium' ? 'candidate' : 'inactive'}>
+                {source.sourceQuality.tier} quality
+              </StatusPill>
+            ) : null}
           </div>
           <h3 className="mt-3 truncate text-[1.65rem] font-semibold leading-tight text-text sm:mt-4 sm:text-[1.75rem]">
             {source.name || 'Unnamed source'}
@@ -40,6 +51,9 @@ export function SourceCard({ source, onCandidateSaved }) {
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-muted">
             {source.language ? <span className="panel-subtle rounded-full px-3 py-1.5">{source.language.toUpperCase()}</span> : null}
             {source.category ? <span className="panel-subtle rounded-full px-3 py-1.5">{source.category}</span> : null}
+            {source.sourceQuality?.score !== undefined ? (
+              <span className="panel-subtle rounded-full px-3 py-1.5">Quality {formatQualityScore(source.sourceQuality.score)}</span>
+            ) : null}
             {source.feedUrl ? (
               <span className="panel-subtle max-w-full truncate rounded-full px-3 py-1.5 sm:max-w-[280px]">{source.feedUrl}</span>
             ) : null}
@@ -61,6 +75,10 @@ export function SourceCard({ source, onCandidateSaved }) {
             <DetailRow label="Language" value={source.language} />
             <DetailRow label="Category" value={source.category} />
             <DetailRow label="Status" value={titleCase(source.status)} />
+            <DetailRow label="Quality score" value={formatQualityScore(source.sourceQuality?.score)} />
+            <DetailRow label="Quality tier" value={titleCase(source.sourceQuality?.tier)} />
+            <DetailRow label="Quality rationale" value={source.sourceQuality?.rationale?.replaceAll('_', ' ')} />
+            <DetailRow label="Quality strategy" value={source.sourceQuality?.strategyVersion} />
             <DetailRow label="Last validated" value={formatDateTime(source.lastValidatedAt)} />
             <DetailRow label="Created" value={formatDateTime(source.createdAt)} />
             <DetailRow label="Updated" value={formatDateTime(source.updatedAt)} />
@@ -75,6 +93,7 @@ export function SourceCard({ source, onCandidateSaved }) {
           ) : null}
 
           {source.isCandidate ? <CandidateSourceEditor source={source} onSaved={onCandidateSaved} /> : null}
+          <SourceQualityEditor source={source} onSaved={onCandidateSaved} />
         </div>
       ) : null}
     </article>
