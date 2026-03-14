@@ -21,6 +21,7 @@ import {
 } from '../repositories/sourceRepository.js';
 import { fetchFeedXml, parseFeedItems } from '../ingestion/rss/rssIngestor.js';
 import { detectLanguage } from './languageDetectionService.js';
+import { resolveSourceQuality } from '../ranking/sourceQualityPolicy.js';
 
 const DEFAULT_FETCH_CONFIG = {
   timeoutMs: 15000,
@@ -152,6 +153,7 @@ const mapAdminSource = (source, options = {}) => {
     isCandidate,
     isEditable: isCandidate,
     sourceSet: isCandidate ? 'candidate_sources' : 'sources',
+    sourceQuality: source.sourceQuality ?? null,
     validationStatus: source.validationStatus ?? mapValidationStatus(validation),
     validationResults: validation,
     validationChecks: mapValidationChecks(validation),
@@ -511,6 +513,7 @@ export const createAdminSourceService = (deps = {}) => {
 
     const created = await resolvedDeps.createSource({
       ...candidate,
+      sourceQuality: resolveSourceQuality({ input, existing: candidate, sourceSet: 'sources' }),
       language: validation.detectedLanguage ?? candidate.language,
       validationStatus: mapValidationStatus(validation),
       lastValidatedAt: new Date(validation.validatedAt),
@@ -538,6 +541,7 @@ export const createAdminSourceService = (deps = {}) => {
     const validation = await validateCandidateSource(input);
     const created = await resolvedDeps.createCandidateSource({
       ...candidate,
+      sourceQuality: resolveSourceQuality({ input, existing: candidate, sourceSet: 'candidate_sources' }),
       language: validation.detectedLanguage ?? candidate.language,
       status: CANDIDATE_SOURCE_STATUS.CANDIDATE,
       validationStatus: mapValidationStatus(validation),
@@ -574,6 +578,7 @@ export const createAdminSourceService = (deps = {}) => {
 
     const updated = await resolvedDeps.updateSourceById(id, {
       ...candidate,
+      sourceQuality: resolveSourceQuality({ input, existing, sourceSet: 'sources' }),
       language: validation.detectedLanguage ?? candidate.language,
       validationStatus: mapValidationStatus(validation),
       lastValidatedAt: new Date(validation.validatedAt),
@@ -609,6 +614,7 @@ export const createAdminSourceService = (deps = {}) => {
     const validation = await validateCandidateSource(input, existing);
     const updated = await resolvedDeps.updateCandidateSourceById(id, {
       ...candidate,
+      sourceQuality: resolveSourceQuality({ input, existing, sourceSet: 'candidate_sources' }),
       language: validation.detectedLanguage ?? candidate.language,
       status: CANDIDATE_SOURCE_STATUS.CANDIDATE,
       validationStatus: mapValidationStatus(validation),

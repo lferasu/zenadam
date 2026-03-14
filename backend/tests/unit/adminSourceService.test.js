@@ -181,4 +181,11 @@ test('admin candidate create saves even when validation fails', async () => {
   assert.equal(created.sourceSet, 'candidate_sources');
   assert.equal(created.isCandidate, true);
   assert.equal(created.validationStatus, 'invalid');
+  assert.deepEqual(created.sourceQuality, {
+    score: 0.5,
+    tier: 'low',
+    rationale: 'candidate_default_pending_review',
+    strategyVersion: 'source-quality-v1',
+    updatedAt: created.sourceQuality.updatedAt
+  });
 });

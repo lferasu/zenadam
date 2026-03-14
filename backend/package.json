@@ -28,7 +28,8 @@
     "cron": "node src/workers/cron.js",
     "test": "node --test",
     "lint": "echo 'linting not configured yet'",
-    "backfill:embeddings": "node scripts/backfill-embeddings.js"
+    "backfill:embeddings": "node scripts/backfill-embeddings.js",
+    "backfill:source-quality": "node scripts/backfill-source-quality.js --include-candidates"
   },
   "dependencies": {
     "cors": "^2.8.5",

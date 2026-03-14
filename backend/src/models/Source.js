@@ -16,6 +16,7 @@ export const createSourceIndexes = async (db) => {
 
   await Promise.all([
     collection.createIndex({ slug: 1 }, { unique: true }),
-    collection.createIndex({ status: 1, type: 1 })
+    collection.createIndex({ status: 1, type: 1 }),
+    collection.createIndex({ 'sourceQuality.score': -1, status: 1 })
   ]);
 };

@@ -11,9 +11,19 @@ export { deleteSourcesByIds, findActiveSourcesByType, findSourceById, findSource
 export { findItemsByIngestStatus, markSourceItemNormalized, upsertSourceItem } from './sourceItemRepository.js';
 export {
   findRepresentativeNormalizedItemForStory,
+  listStoryImageCandidates,
   findUnclusteredNormalizedItems,
   markNormalizedItemsClustered,
   reassignStoryForNormalizedItems,
   upsertNormalizedItem
 } from './normalizedItemRepository.js';
-export { listActiveStories, listSingletonStories, mergeStoryIntoTarget, upsertStoryByClusterKey } from './storyRepository.js';
+export {
+  listActiveStories,
+  findStoryForRanking,
+  listSingletonStories,
+  mergeStoryIntoTarget,
+  updateStoryPrimaryArticle,
+  updateStoryRanking,
+  updateStoryHeroImage,
+  upsertStoryByClusterKey
+} from './storyRepository.js';

@@ -13,6 +13,39 @@ const getCollection = async () => {
 
 const toObjectId = (value) => (value instanceof ObjectId ? value : new ObjectId(value));
 const mergeStoryTopicSignature = (current, incoming) => mergeTopicSignatures(current, incoming);
+const toPersistedRanking = (ranking) => {
+  if (!ranking) {
+    return null;
+  }
+
+  return {
+    storyScore: Number(ranking.storyScore ?? 0),
+    sortLatestAt: ranking.sortLatestAt ? new Date(ranking.sortLatestAt) : new Date(),
+    signals: {
+      recencyScore: Number(ranking.signals?.recencyScore ?? 0),
+      sourceRankScore: Number(ranking.signals?.sourceRankScore ?? 0),
+      popularityScore: Number(ranking.signals?.popularityScore ?? 0),
+      diversityScore: Number(ranking.signals?.diversityScore ?? 0),
+      velocityScore: Number(ranking.signals?.velocityScore ?? 0)
+    },
+    strategyVersion: ranking.strategyVersion ?? 'story-ranking-v1',
+    lastRankedAt: ranking.lastRankedAt ? new Date(ranking.lastRankedAt) : new Date()
+  };
+};
+const toPersistedHeroImage = (heroImage) => {
+  if (!heroImage?.url) {
+    return null;
+  }
+
+  return {
+    url: heroImage.url,
+    sourceItemId: heroImage.sourceItemId ? toObjectId(heroImage.sourceItemId) : null,
+    selectionReason: heroImage.selectionReason ?? 'first_valid',
+    ...(heroImage.width ? { width: heroImage.width } : {}),
+    ...(heroImage.height ? { height: heroImage.height } : {}),
+    updatedAt: heroImage.updatedAt ? new Date(heroImage.updatedAt) : new Date()
+  };
+};
 
 export const upsertStoryByClusterKey = async (story) => {
   const collection = await getCollection();
@@ -32,6 +65,8 @@ export const upsertStoryByClusterKey = async (story) => {
         title: story.title,
         summary: story.summary,
         heroItemId,
+        ...(story.heroImage ? { heroImage: toPersistedHeroImage(story.heroImage) } : {}),
+        ...(story.ranking ? { ranking: toPersistedRanking(story.ranking) } : {}),
         status: story.status ?? STORY_STATUS.ACTIVE,
         targetLanguage: story.targetLanguage ?? env.ZENADAM_TARGET_LANGUAGE,
         updatedAt: now
@@ -188,6 +223,78 @@ export const updateStorySummaryFailed = async ({ storyId, error }) => {
   );
 };
 
+export const updateStoryHeroImage = async ({ storyId, heroImage }) => {
+  const collection = await getCollection();
+
+  if (!heroImage?.url) {
+    return collection.updateOne(
+      { _id: toObjectId(storyId) },
+      {
+        $unset: { heroImage: '' },
+        $set: { updatedAt: new Date() }
+      }
+    );
+  }
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        heroImage: toPersistedHeroImage(heroImage),
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
+export const updateStoryRanking = async ({ storyId, ranking }) => {
+  const collection = await getCollection();
+
+  if (!ranking) {
+    return collection.updateOne(
+      { _id: toObjectId(storyId) },
+      {
+        $unset: { ranking: '' },
+        $set: { updatedAt: new Date() }
+      }
+    );
+  }
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        ranking: toPersistedRanking(ranking),
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
+export const updateStoryPrimaryArticle = async ({ storyId, primaryArticleId }) => {
+  const collection = await getCollection();
+
+  if (!primaryArticleId) {
+    return collection.updateOne(
+      { _id: toObjectId(storyId) },
+      {
+        $unset: { heroArticleId: '' },
+        $set: { updatedAt: new Date() }
+      }
+    );
+  }
+
+  return collection.updateOne(
+    { _id: toObjectId(storyId) },
+    {
+      $set: {
+        heroArticleId: toObjectId(primaryArticleId),
+        updatedAt: new Date()
+      }
+    }
+  );
+};
+
 export const listStoryArticlesForSummary = async ({ storyId, limit = 10 }) => {
   const db = await getDb();
 
@@ -216,7 +323,79 @@ export const listActiveStories = async ({ limit = 50 } = {}) => {
     .toArray();
 };
 
-export const listStoriesForConsumer = async ({ limit = 25, skip = 0 } = {}) => {
+const buildConsumerStorySort = (sort = 'relevant') => {
+  if (sort === 'latest') {
+    return { sortLatestAtComputed: -1, storyScoreComputed: -1, updatedAt: -1, _id: -1 };
+  }
+
+  return { storyScoreComputed: -1, sortLatestAtComputed: -1, updatedAt: -1, _id: -1 };
+};
+
+export const findStoryForRanking = async ({ storyId }) => {
+  const collection = await getCollection();
+
+  const [story] = await collection
+    .aggregate([
+      {
+        $match: {
+          _id: toObjectId(storyId)
+        }
+      },
+      {
+        $lookup: {
+          from: NORMALIZED_ITEM_COLLECTION,
+          let: { itemIds: '$itemIds' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
+            {
+              $lookup: {
+                from: SOURCE_COLLECTION,
+                localField: 'sourceId',
+                foreignField: '_id',
+                as: 'source'
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                sourceId: 1,
+                title: { $ifNull: ['$normalizedTitle', '$title'] },
+                snippet: 1,
+                normalizedDetailedSummary: 1,
+                content: 1,
+                publishedAt: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                clusteringScore: 1,
+                clusteringMetadata: 1,
+                source: { $arrayElemAt: ['$source', 0] }
+              }
+            }
+          ],
+          as: 'items'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          itemIds: 1,
+          sourceIds: 1,
+          articleCount: 1,
+          sourceCount: 1,
+          lastArticlePublishedAt: 1,
+          lastSeenAt: 1,
+          updatedAt: 1,
+          ranking: 1,
+          items: 1
+        }
+      }
+    ])
+    .toArray();
+
+  return story ?? null;
+};
+
+export const listStoriesForConsumer = async ({ limit = 25, skip = 0, sort = 'relevant' } = {}) => {
   const collection = await getCollection();
 
   return collection
@@ -226,10 +405,12 @@ export const listStoriesForConsumer = async ({ limit = 25, skip = 0 } = {}) => {
         $addFields: {
           sourceCountComputed: { $size: { $ifNull: ['$sourceIds', []] } },
           articleCountComputed: { $size: { $ifNull: ['$itemIds', []] } },
-          latestPublishedAt: { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] }
+          latestPublishedAt: { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] },
+          sortLatestAtComputed: { $ifNull: ['$ranking.sortLatestAt', { $ifNull: ['$lastArticlePublishedAt', '$updatedAt'] }] },
+          storyScoreComputed: { $ifNull: ['$ranking.storyScore', 0] }
         }
       },
-      { $sort: { latestPublishedAt: -1, updatedAt: -1, _id: -1 } },
+      { $sort: buildConsumerStorySort(sort) },
       { $skip: skip },
       { $limit: limit },
       {
@@ -267,6 +448,8 @@ export const listStoriesForConsumer = async ({ limit = 25, skip = 0 } = {}) => {
           summary: 1,
           storyTitle: 1,
           storySummary: 1,
+          heroImage: 1,
+          ranking: 1,
           sourceCount: '$sourceCountComputed',
           articleCount: '$articleCountComputed',
           latestPublishedAt: 1,
@@ -297,50 +480,18 @@ export const findStoryForConsumerById = async ({ id }) => {
         }
       },
       {
-        $lookup: {
-          from: NORMALIZED_ITEM_COLLECTION,
-          let: { itemIds: '$itemIds' },
-          pipeline: [
-            { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$itemIds', []] }] } } },
-            { $sort: { publishedAt: -1, createdAt: -1 } },
-            { $limit: 5 },
-            {
-              $lookup: {
-                from: SOURCE_COLLECTION,
-                localField: 'sourceId',
-                foreignField: '_id',
-                as: 'source'
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                title: { $ifNull: ['$normalizedTitle', '$title'] },
-                summary: { $ifNull: ['$normalizedDetailedSummary', '$content'] },
-                snippet: 1,
-                canonicalUrl: 1,
-                publishedAt: 1,
-                sourceName: {
-                  $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
-                }
-              }
-            }
-          ],
-          as: 'articlePreviews'
-        }
-      },
-      {
         $project: {
           _id: 1,
           title: 1,
           summary: 1,
           storyTitle: 1,
           storySummary: 1,
+          heroImage: 1,
+          ranking: 1,
           sourceCount: '$sourceCountComputed',
           articleCount: '$articleCountComputed',
           latestPublishedAt: 1,
-          updatedAt: 1,
-          articlePreviews: 1
+          updatedAt: 1
         }
       }
     ])
@@ -376,9 +527,17 @@ export const listConsumerStoryArticles = async ({ storyId }) => {
           title: { $ifNull: ['$normalizedTitle', '$title'] },
           summary: { $ifNull: ['$normalizedDetailedSummary', '$content'] },
           snippet: 1,
+          normalizedDetailedSummary: 1,
+          content: 1,
+          image: 1,
           canonicalUrl: 1,
           publishedAt: 1,
+          createdAt: 1,
+          updatedAt: 1,
           targetLanguage: 1,
+          clusteringScore: 1,
+          clusteringMetadata: 1,
+          source: { $arrayElemAt: ['$source', 0] },
           sourceName: {
             $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
           }
@@ -471,6 +630,7 @@ export const listStoriesForInspection = async ({
                   $project: {
                     _id: 0,
                     title: 1,
+                    image: 1,
                     publishedAt: 1,
                     source: {
                       $ifNull: [{ $arrayElemAt: ['$source.name', 0] }, { $arrayElemAt: ['$source.slug', 0] }]
@@ -488,6 +648,8 @@ export const listStoriesForInspection = async ({
               summary: 1,
               storyTitle: 1,
               storySummary: 1,
+              heroImage: 1,
+              ranking: 1,
               createdAt: 1,
               updatedAt: 1,
               latestArticleAt: 1,
@@ -548,6 +710,7 @@ export const findStoryForInspectionById = async ({ id }) => {
               $project: {
                 _id: 1,
                 title: 1,
+                image: 1,
                 canonicalUrl: 1,
                 publishedAt: 1,
                 language: 1,
@@ -571,6 +734,8 @@ export const findStoryForInspectionById = async ({ id }) => {
           summary: 1,
           storyTitle: 1,
           storySummary: 1,
+          heroImage: 1,
+          ranking: 1,
           createdAt: 1,
           updatedAt: 1,
           articleCount: '$articleCountComputed',

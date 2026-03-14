@@ -23,6 +23,8 @@ export const createStoryIndexes = async (db) => {
     ),
     collection.createIndex({ status: 1, updatedAt: -1 }),
     collection.createIndex({ language: 1, updatedAt: -1 }),
-    collection.createIndex({ storySummaryStatus: 1, updatedAt: -1 })
+    collection.createIndex({ storySummaryStatus: 1, updatedAt: -1 }),
+    collection.createIndex({ status: 1, 'ranking.storyScore': -1, 'ranking.sortLatestAt': -1 }),
+    collection.createIndex({ status: 1, 'ranking.sortLatestAt': -1, updatedAt: -1 })
   ]);
 };

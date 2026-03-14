@@ -43,6 +43,32 @@ export function SourceForm({
           Language
           <input className={FIELD_CLASS} name="language" value={form.language} onChange={onChange} placeholder="am" />
         </label>
+
+        <label className="text-[15px] font-medium text-text md:max-w-[220px]">
+          Quality score
+          <input
+            className={FIELD_CLASS}
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            name="sourceQualityScore"
+            value={form.sourceQualityScore ?? ''}
+            onChange={onChange}
+            placeholder="0.75"
+          />
+        </label>
+
+        <label className="text-[15px] font-medium text-text md:col-span-2">
+          Quality rationale
+          <input
+            className={FIELD_CLASS}
+            name="sourceQualityRationale"
+            value={form.sourceQualityRationale ?? ''}
+            onChange={onChange}
+            placeholder="regional newsroom with broad coverage"
+          />
+        </label>
       </div>
 
       <div>

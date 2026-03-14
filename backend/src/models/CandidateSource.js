@@ -9,6 +9,7 @@ export const createCandidateSourceIndexes = async (db) => {
 
   await Promise.all([
     collection.createIndex({ slug: 1 }, { unique: true }),
-    collection.createIndex({ updatedAt: -1, createdAt: -1 })
+    collection.createIndex({ updatedAt: -1, createdAt: -1 }),
+    collection.createIndex({ 'sourceQuality.score': -1, updatedAt: -1 })
   ]);
 };

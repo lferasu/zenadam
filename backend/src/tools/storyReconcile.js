@@ -11,7 +11,9 @@ import {
 import { listSingletonStories, mergeStoryIntoTarget } from '../repositories/storyRepository.js';
 import { cosineSimilarity } from '../services/embeddingService.js';
 import { evaluateStoryCandidates } from '../services/incrementalClusteringService.js';
+import { refreshStoryHeroImage } from '../services/storyImageService.js';
 import { ensureRuntimeInitialized } from '../services/runtimeService.js';
+import { refreshStoryRanking } from '../ranking/storyRankingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,6 +136,8 @@ export const reconcileStories = async (rawOptions = {}) => {
         });
 
         if (mergeResult.merged) {
+          await refreshStoryHeroImage({ storyId: bestStory.storyId });
+          await refreshStoryRanking({ storyId: bestStory.storyId });
           report.totals.merged += 1;
         } else {
           report.totals.failed += 1;
